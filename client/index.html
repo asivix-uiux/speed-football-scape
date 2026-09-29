@@ -158,7 +158,10 @@ body.touch #sprintHint { display: none; }
 .logo .b { color: var(--green); display: block; }
 .play { font-size: 2.2rem; padding: 0.5rem 3.2rem; border-radius: 1.2rem; }
 .controls { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.4rem 1.2rem; font-size: 1.05rem; font-weight: 600; color: #efe8ff; }
-.controls kbd, #promptBtn kbd { text-shadow: none; }
+.controls kbd, #promptBtn kbd, .pad-hint kbd { text-shadow: none; }
+.pad-hint { font-size: 1.15rem; font-weight: 700; color: var(--green); }
+.pad-hint kbd { font: 700 1rem var(--font); background: var(--green); color: var(--ink); border-radius: 50%; padding: 0.05rem 0.45rem; }
+.row-card button:focus-visible, .seg .btn:focus-visible, .set-row input:focus-visible, .rebirth-box button:focus-visible { outline: 4px solid var(--yellow); outline-offset: 3px; }
 .controls kbd { font: 700 0.9rem var(--font); background: var(--white); color: var(--ink); border-radius: 0.35rem; padding: 0.05rem 0.4rem; margin-right: 0.25rem; }
 .demo-note { font-size: 0.95rem; color: #d9cffc; margin: 0; max-width: 30rem; }
 #loading { font-size: 1.2rem; font-weight: 600; }
@@ -367,6 +370,7 @@ body.touch #sprintHint { display: none; }
             <div class="controls o1" id="controlsKb">
                 <span><kbd>WASD</kbd>Move</span><span><kbd>Space</kbd>Jump</span><span><kbd>Shift</kbd>Sprint</span><span><kbd>E</kbd>Interact</span><span><kbd>Drag</kbd>Camera</span><span><kbd>Wheel</kbd>Zoom</span>
             </div>
+            <div class="pad-hint o1" id="padHint" hidden>🎮 Controller connected · press <kbd>A</kbd> to play</div>
             <p class="demo-note o1">Multiplayer. Run to gain Speed, escape the stages for Wins and race other players on the leaderboards. Robux buttons are free in this demo.</p>
         </div>
     </div>

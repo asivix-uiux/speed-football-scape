@@ -6,10 +6,11 @@ import {
 } from './engine.js';
 import { S, actions, net } from './state.js';
 import { initAudio, startMusic, sfx } from './audio.js';
+import { pad, pollGamepad, rumble, onGamepadConnection } from './gamepad.js';
 import { render, setSpeedLines, updateFx, dust, sparkleColumn, ring, fireworks } from './fx.js';
 import { buildWorld, SPAWN, pickups, beltTex, refreshShop, renderBoards, treadLocked, updateSlabs } from './world.js';
 import {
-    updateHud, toast, levelUp, showStageTitle, buy, showRevive, hideRevive, closeModal,
+    updateHud, toast, levelUp, showStageTitle, buy, showRevive, hideRevive, closeModal, openModal,
     refreshModal, promptEl, promptTxtEl, showGoal, animateCounters,
 } from './ui.js';
 import {
@@ -111,7 +112,7 @@ function die() {
     if (P.dead || P.shield > 0) return;
     P.dead = true;
     burst(P.pos.clone().add(new V3(0, 2.5, 0)), 0x2f7bff);
-    sfx('death'); addShake(0.9);
+    sfx('death'); addShake(0.9); rumble(1, 400);
     resetChase();
     sendMove(true);
     showRevive();
@@ -155,7 +156,7 @@ function updateBalls() {
             P.push.copy(new V3(Math.sign(sx) * 0.55, 0, -1).normalize().multiplyScalar(CFG.ballKnockback));
             P.vel.y = 38; P.onGround = false;
             P.shield = 0.35;
-            sfx('hit'); addShake(0.7);
+            sfx('hit'); addShake(0.7); rumble(0.8, 250);
         }
     }
 }
@@ -320,7 +321,7 @@ async function connect(name) {
     room.onMessage('toast', (m) => toast(m.text, m.color));
     room.onMessage('levelUp', (m) => {
         levelUp(m.from, m.to);
-        sfx('levelUp');
+        sfx('levelUp'); rumble(0.3, 150);
         ring(P.pos, 0x46ec50, 10, 0.8);
         sparkleColumn(P.pos, 0x7dff6b);
     });
@@ -331,7 +332,7 @@ async function connect(name) {
     room.onMessage('wins', (m) => {
         refreshShop();
         showGoal(m.n);
-        sfx('cheer');
+        sfx('cheer'); rumble(0.7, 500);
         confettiAt(P.pos.clone().add(new V3(0, 4, 0)));
         fireworks(P.pos, 6, () => sfx('firework'));
     });
@@ -493,8 +494,69 @@ function updatePrompt() {
     promptEl.style.top = ((1 - projV.y) / 2 * innerHeight) + 'px';
     const txt = best.label();
     if (promptTxtEl.textContent !== txt) promptTxtEl.textContent = txt;
+    const key = usingPad() ? 'X' : 'E';
+    if (promptKey.textContent !== key) promptKey.textContent = key;
 }
 function usePrompt() { if (activePrompt) activePrompt.act(); }
+const promptKey = promptEl.querySelector('kbd');
+const usingPad = () => pad.connected && performance.now() - pad.lastUsed < 8000;
+
+// Controller buttons: popups and panels first, then gameplay shortcuts
+const shown = (sel) => { const e = $(sel); return !!e && !e.hidden; };
+function focusStep(container, dir) {
+    const items = [...container.querySelectorAll('button:not(:disabled), input[type=range]')];
+    if (!items.length) return;
+    const i = items.indexOf(document.activeElement);
+    const next = items[i < 0 ? 0 : (i + dir + items.length) % items.length];
+    next.focus({ preventScroll: false });
+    next.scrollIntoView({ block: 'nearest' });
+}
+function padButtons() {
+    const p = pad.pressed;
+    if (!p.size) return;
+    const overlay = ['#start', '#offline', '#buy', '#revive', '#modal'].find(shown);
+    if (overlay) pad.jump = false;
+    if (overlay === '#start') { if ((p.has('A') || p.has('START')) && !$('#playBtn').disabled && shown('#joinRow')) play(); return; }
+    if (overlay === '#offline') { if (p.has('A')) $('#reconnectBtn').click(); return; }
+    if (overlay === '#buy') { if (p.has('A')) $('#buyOk').click(); else if (p.has('B')) $('#buyCancel').click(); return; }
+    if (overlay === '#revive') { if (p.has('A')) $('#reviveYes').click(); else if (p.has('B')) $('#reviveNo').click(); return; }
+    if (overlay === '#modal') {
+        const body = $('#modal');
+        const el = document.activeElement;
+        const onSlider = el && el.type === 'range' && body.contains(el);
+        if (onSlider && (p.has('LEFT') || p.has('RIGHT'))) {
+            el.value = Number(el.value) + (p.has('RIGHT') ? 5 : -5);
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            return;
+        }
+        if (p.has('DOWN') || p.has('RIGHT')) focusStep(body, 1);
+        else if (p.has('UP') || p.has('LEFT')) focusStep(body, -1);
+        else if (p.has('A') && el && body.contains(el) && el.tagName === 'BUTTON') el.click();
+        else if (['B', 'Y', 'LB', 'RB', 'BACK', 'START'].some((b) => p.has(b))) { closeModal(); canvas.focus(); }
+        return;
+    }
+    if (!running) return;
+    if (p.has('X')) usePrompt();
+    if (p.has('Y')) openModal('store');
+    if (p.has('LB')) openModal('rebirth');
+    if (p.has('RB')) openModal('auras');
+    if (p.has('BACK')) openModal('free');
+    if (p.has('START')) openModal('settings');
+    if (p.has('UP')) cam.dist = clamp(cam.dist - 4, 8, 45);
+    if (p.has('DOWN')) cam.dist = clamp(cam.dist + 4, 8, 45);
+    if (['Y', 'LB', 'RB', 'BACK', 'START'].some((b) => p.has(b))) focusStep($('#modal'), 1);
+}
+onGamepadConnection((g, on) => {
+    $('#padHint').hidden = !on;
+    if (running) toast(on ? '🎮 Controller connected' : '🎮 Controller disconnected', on ? '#7dff6b' : '#ffb51c');
+});
+let sprintHintPad = null;
+function updateSprintHint() {
+    const p = usingPad();
+    if (p === sprintHintPad) return;
+    sprintHintPad = p;
+    $('#sprintHint').textContent = p ? 'HOLD RT TO SPRINT!' : 'HOLD SHIFT TO SPRINT!';
+}
 promptEl.addEventListener('click', usePrompt);
 
 // =====================================================================================
@@ -511,7 +573,9 @@ function update(dt) {
     if (keys.KeyS || keys.ArrowDown) f -= 1;
     if (keys.KeyD || keys.ArrowRight) r += 1;
     if (keys.KeyA || keys.ArrowLeft) r -= 1;
-    f -= touchMove.y; r += touchMove.x;
+    f -= touchMove.y + pad.ly; r += touchMove.x + pad.lx;
+    cam.yaw -= pad.rx * 2.8 * dt;
+    cam.pitch = clamp(cam.pitch + pad.ry * 1.8 * dt, -0.25, 1.35);
     tmpF.set(-Math.sin(cam.yaw), 0, -Math.cos(cam.yaw));
     tmpR.set(Math.cos(cam.yaw), 0, -Math.sin(cam.yaw));
     mv.set(0, 0, 0).addScaledVector(tmpF, f).addScaledVector(tmpR, r);
@@ -519,14 +583,14 @@ function update(dt) {
     if (P.dead) mv.set(0, 0, 0);
     P.moving = mv.lengthSq() > 0.01;
 
-    const wantSprint = keys.ShiftLeft || keys.ShiftRight || touchSprint;
+    const wantSprint = keys.ShiftLeft || keys.ShiftRight || touchSprint || pad.sprint;
     P.sprinting = wantSprint && P.moving && P.stamina > 0;
     if (P.sprinting) { P.stamina = Math.max(0, P.stamina - CFG.staminaDrain * dt); P.staminaIdle = 0; }
     else { P.staminaIdle += dt; if (P.staminaIdle > CFG.staminaDelay) P.stamina = Math.min(CFG.staminaMax, P.stamina + CFG.staminaRegen * dt); }
 
     if (!P.dead) {
         const ws = walkSpeed();
-        if ((keys.Space || touchJump) && P.onGround) {
+        if ((keys.Space || touchJump || pad.jump) && P.onGround) {
             P.vel.y = JUMP_V; P.onGround = false;
             sfx('jump'); P.squashV += 5; dust(P.pos, 4, 0.6);
         }
@@ -555,7 +619,7 @@ function update(dt) {
                 sfx('land');
                 dust(P.pos, P.airTime > 0.7 ? 12 : 7, P.airTime > 0.7 ? 1.4 : 1);
                 P.squashV -= Math.min(9, 3 + P.airTime * 6);
-                if (P.airTime > 0.9) { ring(P.pos, 0xffffff, 5, 0.45); addShake(0.35); }
+                if (P.airTime > 0.9) { ring(P.pos, 0xffffff, 5, 0.45); addShake(0.35); rumble(0.4, 120); }
             }
             P.airTime = 0;
         } else P.airTime += dt;
@@ -652,7 +716,9 @@ let lastFrame = 0;
 function frame(now) {
     const dt = Math.min(0.05, (now - (lastFrame || now)) / 1000);
     lastFrame = now;
-    if (running) update(dt);
+    pollGamepad();
+    padButtons();
+    if (running) { update(dt); updateSprintHint(); }
     else { beltTex.offset.x = (beltTex.offset.x + dt * 0.75) % 1; updateSlabs(now / 1000); }
     updateCamera(dt);
     render();

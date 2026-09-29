@@ -24,6 +24,20 @@ npm start            # server + game on http://localhost:2567
 
 For development, run `npm run dev:server` and `npm run dev:client` in two terminals, then open the Vite URL (http://localhost:5173). In dev the client connects to the server on port 2567; set `VITE_SERVER_URL` to point it somewhere else.
 
+## Controls
+
+| Action | Keyboard / mouse | Controller |
+|---|---|---|
+| Move | WASD / arrows | Left stick |
+| Camera | Drag, wheel to zoom | Right stick, D-pad up/down to zoom |
+| Jump | Space | A |
+| Sprint | Hold Shift | Hold RT, LT or L3 |
+| Interact (shop, equip) | E | X |
+| Store / Rebirth / Auras / FREE / Settings | HUD buttons | Y / LB / RB / Back / Start |
+| Panels and popups | Mouse | D-pad to move, A to select, B to close |
+
+Controllers use the browser Gamepad API (standard mapping), so any XInput-style pad works. If a controller is not detected, switch it to its PC / X-input mode and press a button once the page is open. Phones get an on-screen joystick.
+
 ## How multiplayer works
 
 - Everyone joins one shared `speed` room (up to 24 players), which covers the lobby and all six stages.
