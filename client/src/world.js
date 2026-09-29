@@ -113,7 +113,7 @@ function pedestalLines(d) {
     lines.push({ t: '+' + fmt(d.bonus) + ' Speed / step', c: '#7dff6b', s: '#16121f', px: 46 });
     if (S.equipped === d.id) lines.push({ t: 'EQUIPPED', c: '#6fe0ff', s: '#16121f', px: 48 });
     else if (S.owned[d.id]) lines.push({ t: 'OWNED', c: '#ffffff', s: '#16121f', px: 48 });
-    else if (d.pass) lines.push({ t: 'R$' + PASSES[d.pass].price, c: '#7dff6b', s: '#16121f', px: 50 });
+    else if (d.pass) lines.push({ t: '⏣' + PASSES[d.pass].price, c: '#7dff6b', s: '#16121f', px: 50 });
     else lines.push({ t: '🏆 ' + fmt(d.req) + ' Wins', c: '#ffd028', s: '#16121f', px: 48 });
     return lines;
 }
@@ -169,7 +169,7 @@ function treadLines(def) {
     const col = def.mult === 25 ? '#c28cff' : def.mult === 9 ? '#6fe0ff' : def.mult === 3 ? '#ffbe28' : '#ffffff';
     const lines = [{ t: 'x' + def.mult + ' Speed', c: col, s: '#16121f', px: 70 }];
     if (def.tag) lines.push({ t: def.tag, c: '#ff4a4a', s: '#16121f', px: 44 });
-    if (treadLocked(def)) lines.push({ t: def.pass ? '🔒 R$' + PASSES[def.pass].price : '🔒 ' + def.req + ' Wins', c: '#ffd028', s: '#16121f', px: 48 });
+    if (treadLocked(def)) lines.push({ t: def.pass ? '🔒 ⏣' + PASSES[def.pass].price : '🔒 ' + def.req + ' Wins', c: '#ffd028', s: '#16121f', px: 48 });
     return lines;
 }
 export function refreshShop() {
@@ -315,7 +315,7 @@ function buildLobby() {
     pad.position.set(bp.x, 0.2, bp.z); scene.add(pad);
     const statue = buildRig(GOLD); statue.position.set(bp.x, 0.4, bp.z);
     statue.rotation.y = Math.atan2(-bp.x, -bp.z); statue.scale.setScalar(1.3); armsUp(statue); scene.add(statue);
-    billboard([{ t: 'SPEED BOOST', c: '#ffd028', s: '#16121f', px: 76 }, { t: 'x2 Speed for 15 min', c: '#ffffff', s: '#16121f', px: 48 }, { t: 'R$' + PRODUCTS.SpeedBoost.price, c: '#7dff6b', s: '#16121f', px: 52 }], 14, 512, new V3(bp.x, 13, bp.z));
+    billboard([{ t: 'SPEED BOOST', c: '#ffd028', s: '#16121f', px: 76 }, { t: 'x2 Speed for 15 min', c: '#ffffff', s: '#16121f', px: 48 }, { t: '⏣' + PRODUCTS.SpeedBoost.price, c: '#7dff6b', s: '#16121f', px: 52 }], 14, 512, new V3(bp.x, 13, bp.z));
     const btr = aabb(bp.x, 3.5, bp.z, 12, 7, 12);
     btr.enter = () => actions.buy('product', 'SpeedBoost');
     triggers.push(btr);
@@ -391,7 +391,7 @@ function returnPad(stageIdx, x, z, wins, finish) {
 function doubleWinsPad(x, z) {
     const pad = new T.Mesh(new T.CylinderGeometry(4, 4, 0.4, 32), mat(CC.purple, { neon: true }));
     pad.position.set(x, 0.2, z); scene.add(pad);
-    billboard([{ t: 'x2 Wins', c: '#e27bff', s: '#16121f', px: 80 }, { t: 'R$' + PASSES.DoubleWins.price, c: '#7dff6b', s: '#16121f', px: 50 }], 8, 512, new V3(x, 7, z));
+    billboard([{ t: 'x2 Wins', c: '#e27bff', s: '#16121f', px: 80 }, { t: '⏣' + PASSES.DoubleWins.price, c: '#7dff6b', s: '#16121f', px: 50 }], 8, 512, new V3(x, 7, z));
     const tr = aabb(x, 3, z, 8, 6, 8);
     tr.enter = () => actions.buy('pass', 'DoubleWins');
     triggers.push(tr);

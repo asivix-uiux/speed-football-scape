@@ -5,7 +5,7 @@
 let ctx = null, master, musicBus, sfxBus, reverb, delay, crowdGain;
 let noiseBuf = null;
 let musicOn = false, schedTimer = null, step = 0, nextTime = 0;
-const settings = { music: 0.6, sfx: 0.8 };
+const settings = { music: 0.6, sfx: 0.8, master: 1 };
 try { Object.assign(settings, JSON.parse(localStorage.getItem('sfs_audio') || '{}')); } catch (e) { /* defaults */ }
 
 const BPM = 124, STEP = 60 / BPM / 4;
@@ -69,9 +69,10 @@ export function initAudio() {
 function applyVolumes() {
     if (!ctx) return;
     const t = ctx.currentTime;
-    musicBus.gain.setTargetAtTime(settings.music * 0.55, t, 0.05);
-    sfxBus.gain.setTargetAtTime(settings.sfx, t, 0.05);
-    if (crowdGain) crowdGain.gain.setTargetAtTime(settings.sfx * 0.05, t, 0.2);
+    const m = settings.master ?? 1;
+    musicBus.gain.setTargetAtTime(settings.music * 0.55 * m, t, 0.05);
+    sfxBus.gain.setTargetAtTime(settings.sfx * m, t, 0.05);
+    if (crowdGain) crowdGain.gain.setTargetAtTime(settings.sfx * 0.05 * m, t, 0.2);
 }
 export function getVolumes() { return { ...settings }; }
 export function setVolume(kind, v) {

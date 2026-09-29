@@ -18,6 +18,7 @@ export const PlayerState = schema({
     aura: t.string().default(''),
     kit: t.uint8().default(0),
     skin: t.uint8().default(0),
+    av: t.string().default(''), // packed Bloxity avatar (equipped ids + proportions)
 }, 'PlayerState');
 
 export const GameState = schema({

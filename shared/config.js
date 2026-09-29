@@ -97,6 +97,23 @@ export const PASSES = {
     PrimeRonaldo: { name: 'Prime Ronaldo', price: 299, ic: '👑', desc: '+25K Speed per step' },
     RainbowAura: { name: 'Rainbow Aura', price: 99, ic: '🌈', desc: 'x5 Speed aura' },
 };
+// Bloxity Bux SKUs: create these in the game's IAP catalog on bloxity.io (prices live there)
+export const SKUS = {
+    product: {
+        Speed10K: 'speed_10k', Speed100K: 'speed_100k', Speed1M: 'speed_1m',
+        StarterPack: 'starter_pack', Revive: 'revive', SpeedBoost: 'speed_boost',
+    },
+    pass: {
+        DoubleSpeed: 'pass_double_speed', DoubleWins: 'pass_double_wins',
+        RunArea9x: 'pass_run_area_9x', RunArea25x: 'pass_run_area_25x',
+        PrimeMessi: 'pass_prime_messi', PrimeRonaldo: 'pass_prime_ronaldo', RainbowAura: 'pass_rainbow_aura',
+    },
+};
+export function skuLookup(sku) {
+    for (const kind of ['product', 'pass']) for (const [key, s] of Object.entries(SKUS[kind])) if (s === sku) return { kind, key };
+    return null;
+}
+
 export const OFFERS = [
     { title: 'OP STARTER PACK', ic: '🎁', kind: 'product', key: 'StarterPack' },
     { title: '1M Speed', ic: '👟', kind: 'product', key: 'Speed1M' },

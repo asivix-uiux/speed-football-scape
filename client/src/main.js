@@ -5,10 +5,12 @@ import {
     floatText, updateEffects, lerpAngle,
 } from './engine.js';
 import { S, actions, net } from './state.js';
-import { initAudio, startMusic, sfx } from './audio.js';
+import { initAudio, startMusic, sfx, setVolume } from './audio.js';
+import * as BX from './bloxity.js';
+import { createAvatar, loadBase, packAvatar, unpackAvatar } from './avatar.js';
 import { updateMaterials } from './textures.js';
 import { pad, pollGamepad, rumble, onGamepadConnection } from './gamepad.js';
-import { render, setSpeedLines, updateFx, dust, sparkleColumn, ring, fireworks } from './fx.js';
+import { render, setSpeedLines, updateFx, dust, sparkleColumn, ring, fireworks, setQuality } from './fx.js';
 import { buildWorld, SPAWN, pickups, beltTex, refreshShop, renderBoards, treadLocked, updateSlabs, gatePulse, updateGates } from './world.js';
 import {
     updateHud, toast, levelUp, showStageTitle, buy, showRevive, hideRevive, closeModal, openModal,
@@ -33,6 +35,43 @@ let shake = 0;
 function addShake(a) { if (!reduceMotion) shake = Math.min(1.2, shake + a); }
 let rig, auraFx, headLabel, headLabelText = '', follower = null, followerId = null;
 
+// ----- Bloxity avatars -----
+// The Bloxity body replaces the blocky rig's meshes; labels and the aura stay on the rig group.
+function dressRig(group, avatar) {
+    group.children.forEach((c) => { if (!c.isSprite && !c.userData.ringM) c.visible = false; });
+    group.add(avatar.root);
+    group.userData.blox = avatar;
+}
+let localAvatar = null, localAvatarReq = 0;
+async function setupLocalAvatar() {
+    const req = ++localAvatarReq;
+    const a = await createAvatar(BX.currentAvatar(), BX.getSkinTextureUrl());
+    if (!a) return;
+    if (req !== localAvatarReq || !rig) { a.dispose(); return; }
+    if (localAvatar) localAvatar.dispose();
+    localAvatar = a;
+    dressRig(rig, a);
+}
+function syncMyAvatar() {
+    const av = BX.currentAvatar();
+    if (localAvatar && av) { localAvatar.setProportions(av.proportions); localAvatar.setEquipped(av, BX.getSkinTextureUrl()); }
+    net.send('avatar', { av: packAvatar(av) });
+}
+async function playEmoteOn(avatar, id) {
+    if (!avatar) return;
+    const cat = await BX.loadEmotes();
+    const e = cat.get(id);
+    if (e && e.clip) avatar.playEmote(e.clip);
+}
+// Chat bubble above a rig for a few seconds
+function chatBubble(group, text) {
+    if (!group) return;
+    if (group.userData.bubble) { group.remove(group.userData.bubble); group.userData.bubble.material.map.dispose(); }
+    const b = billboard([{ t: '💬 ' + text, c: '#ffffff', s: '#16121f', px: 44 }], 9, 1024, new V3(0, 9.4, 0), group);
+    group.userData.bubble = b;
+    setTimeout(() => { if (group.userData.bubble === b) { group.remove(b); b.material.map.dispose(); group.userData.bubble = null; } }, 5000);
+}
+
 function buildPlayer(kit, skin) {
     if (rig) scene.remove(rig);
     const k = KITS[kit % KITS.length];
@@ -42,6 +81,8 @@ function buildPlayer(kit, skin) {
     headLabel = billboard([{ t: '0 Speed', c: '#ffffff', s: '#16121f', px: 60 }], 6, 512, new V3(0, 7.4, 0), rig);
     auraFx = buildAuraFx(rig);
     rig.position.copy(P.pos);
+    localAvatar = null;
+    setupLocalAvatar();
 }
 function refreshFollower() {
     if (followerId === S.equipped) return;
@@ -219,6 +260,7 @@ actions.shop = (d) => {
 // Other players
 // =====================================================================================
 const remotes = new Map();
+let joinSynced = false;
 class Remote {
     constructor(p) {
         this.kit = p.kit; this.skin = p.skin;
@@ -232,6 +274,23 @@ class Remote {
         this.aura = buildAuraFx(this.rig);
         this.follower = null; this.followerId = null;
         this.phase = Math.random() * 6;
+        this.av = null; this.blox = null; this.dead = false;
+        this.setAvatar(p.av);
+    }
+    setAvatar(av) {
+        this.av = av;
+        const data = av ? unpackAvatar(av) : null;
+        if (this.blox) { this.blox.setProportions(data && data.proportions); this.blox.setEquipped(data || {}); return; }
+        if (this.loading) return;
+        this.loading = true;
+        createAvatar(data).then((a) => {
+            this.loading = false;
+            if (!a) return;
+            if (this.dead) { a.dispose(); return; }
+            this.blox = a;
+            dressRig(this.rig, a);
+            if (this.av !== av) this.setAvatar(this.av);
+        });
     }
     update(p, dt, t) {
         const r = this.rig;
@@ -241,6 +300,8 @@ class Remote {
         else { r.position.x += (tx - r.position.x) * k; r.position.y += (ty - r.position.y) * k; r.position.z += (tz - r.position.z) * k; }
         r.rotation.y = lerpAngle(r.rotation.y, p.ry, k);
         r.visible = p.anim !== 3;
+        if (p.av !== this.av) this.setAvatar(p.av);
+        if (this.blox) this.blox.update(dt, { moving: p.anim === 1, air: p.anim === 2, speed: 30, t });
         if (p.anim === 2) airPose(r);
         else { this.phase += dt * (p.anim === 1 ? 14 : 0); animRig(r, this.phase, p.anim === 1 ? 0.9 : 0); }
         const text = p.name + '|' + fmt(p.speed);
@@ -259,6 +320,8 @@ class Remote {
         if (this.follower) updateFollower(this.follower, r.position, r.rotation.y, dt, r.visible);
     }
     dispose() {
+        this.dead = true;
+        if (this.blox) this.blox.dispose();
         scene.remove(this.rig);
         if (this.follower) scene.remove(this.follower);
     }
@@ -278,10 +341,14 @@ function syncRemotes(dt, t) {
         }
         seen.add(id);
         let r = remotes.get(id);
-        if (!r) { r = new Remote(p); remotes.set(id, r); }
+        if (!r) {
+            r = new Remote(p); remotes.set(id, r);
+            if (joinSynced) BX.playerJoined(p.name); else BX.playerInRoom(p.name);
+        }
         r.update(p, dt, t);
     });
     for (const [id, r] of remotes) if (!seen.has(id)) { r.dispose(); remotes.delete(id); }
+    joinSynced = true;
     return room.state.players.size;
 }
 
@@ -315,9 +382,21 @@ function playerUid() {
 
 async function connect(name) {
     const client = new Client(SERVER_URL);
-    const room = await client.joinOrCreate('speed', { uid: playerUid(), name });
+    const id = BX.identity();
+    const room = await client.joinOrCreate('speed', {
+        uid: playerUid(), name: name || id.name, token: id.token, av: packAvatar(BX.currentAvatar()),
+    });
     net.room = room;
-    room.onMessage('hello', (m) => { net.offset = m.now - Date.now(); });
+    joinSynced = false;
+    room.onMessage('hello', (m) => { net.offset = m.now - Date.now(); net.bux = !!m.bux; net.bloxity = !!m.bloxity; });
+    room.onMessage('authed', () => { net.bloxity = true; });
+    room.onMessage('emote', (m) => { const r = remotes.get(m.s); if (r) playEmoteOn(r.blox, m.id); });
+    room.onMessage('chat', (m) => {
+        toast(m.name + ': ' + m.text, '#ffffff');
+        chatBubble(m.s === room.sessionId ? rig : remotes.get(m.s) && remotes.get(m.s).rig, m.text);
+    });
+    BX.updateRoom(room.roomId);
+    BX.gameplayStart();
     room.onMessage('profile', (m) => {
         Object.assign(S, m);
         refreshShop(); refreshFollower(); refreshModal();
@@ -353,7 +432,8 @@ async function connect(name) {
     });
     room.onMessage('ball', spawnBall);
     room.onMessage('boards', renderBoards);
-    room.onLeave((code) => {
+    room.onLeave((code, reason) => {
+        console.warn('[net] left room', code, reason || '');
         net.room = null;
         if (code !== 1000) {
             $('#offline').hidden = false;
@@ -366,6 +446,7 @@ async function connect(name) {
 // Camera & input
 // =====================================================================================
 const cam = { yaw: Math.PI, pitch: 0.42, dist: 24, target: new V3() };
+let camSens = 1;
 const keys = {};
 const touchMove = { x: 0, y: 0 };
 let touchSprint = false, touchJump = false, running = false;
@@ -375,7 +456,10 @@ addEventListener('keydown', (e) => {
     keys[e.code] = true;
     if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
     if (e.code === 'KeyE' && running) usePrompt();
-    if (e.code === 'Escape') closeModal();
+    if (e.code === 'Escape') {
+        if (!$('#modal').hidden) closeModal();
+        else if (running && BX.isEmbedded()) BX.showPortalMenu();
+    }
 });
 addEventListener('keyup', (e) => { keys[e.code] = false; });
 addEventListener('blur', () => { for (const k in keys) keys[k] = false; });
@@ -386,7 +470,7 @@ canvas.addEventListener('pointerdown', (e) => { canvas.setPointerCapture(e.point
 canvas.addEventListener('pointermove', (e) => {
     const d = drags.get(e.pointerId);
     if (!d) return;
-    const k = e.pointerType === 'touch' ? 0.008 : 0.005;
+    const k = (e.pointerType === 'touch' ? 0.008 : 0.005) * camSens;
     cam.yaw -= (e.clientX - d.x) * k;
     cam.pitch = clamp(cam.pitch + (e.clientY - d.y) * k, -0.25, 1.35);
     d.x = e.clientX; d.y = e.clientY;
@@ -688,6 +772,7 @@ function update(dt) {
     const hs = P.moving ? walkSpeed() : 0;
     P.animPhase += dt * (P.onGround ? Math.min(18, 4 + hs * 0.2) : 0);
     if (P.onGround) animRig(rig, P.animPhase, P.moving ? 0.9 : 0); else airPose(rig);
+    if (localAvatar) localAvatar.update(dt, { moving: P.moving && P.onGround, air: !P.onGround, speed: hs, t });
     const stepN = Math.floor(P.animPhase / Math.PI);
     if (P.onGround && P.moving && !P.dead && stepN !== P.lastStep) {
         sfx('step');
@@ -718,10 +803,18 @@ function update(dt) {
 // =====================================================================================
 // Boot
 // =====================================================================================
-let lastFrame = 0;
+let lastFrame = 0, loadingSignaled = false, fpsAcc = 0, fpsFrames = 0, showFps = false;
 function frame(now) {
     const dt = Math.min(0.05, (now - (lastFrame || now)) / 1000);
+    fpsAcc += (now - (lastFrame || now)) / 1000; fpsFrames++;
+    if (fpsAcc >= 0.5) { if (showFps) $('#fps').textContent = Math.round(fpsFrames / fpsAcc) + ' FPS'; fpsAcc = 0; fpsFrames = 0; }
     lastFrame = now;
+    if (!loadingSignaled) {
+        // First frame after setup: apply portal settings and lift the Bloxity loading overlay
+        loadingSignaled = true;
+        BX.triggerAllSettings();
+        BX.loadingEnd();
+    }
     pollGamepad();
     padButtons();
     if (running) { update(dt); updateSprintHint(); }
@@ -734,12 +827,12 @@ function frame(now) {
 async function play() {
     const nameInput = $('#nameInput');
     const name = nameInput.value.trim().slice(0, 20);
-    storageSet('sfs_name', name);
+    if (name) storageSet('sfs_name', name);
     const btn = $('#playBtn'), err = $('#connectErr');
     btn.disabled = true; btn.textContent = 'JOINING…'; err.hidden = true;
     initAudio();
     try {
-        const room = await connect(name);
+        const room = await connect(BX.identity().loggedIn ? '' : name);
         const me = room.state.players && room.state.players.get(room.sessionId);
         S.name = me ? me.name : name;
     } catch (e) {
@@ -762,9 +855,62 @@ async function play() {
     canvas.focus();
 }
 
+// Portal settings only apply when the game runs inside bloxity.io (standalone has its own panel)
+function wirePortalSettings() {
+    const embedded = (fn) => (v) => { if (BX.isEmbedded()) fn(v); };
+    const pct = (v) => clamp((parseInt(v, 10) || 0) / 100, 0, 1);
+    BX.listenSetting('master_volume', embedded((v) => setVolume('master', pct(v))));
+    BX.listenSetting('music_volume', embedded((v) => setVolume('music', pct(v))));
+    BX.listenSetting('graphics_quality', embedded((v) => setQuality(v === 'Low' ? 'low' : v === 'Medium' ? 'medium' : 'high')));
+    BX.listenSetting('camera_sensitivity', embedded((v) => { camSens = clamp(parseFloat(v) || 1, 0.1, 5); }));
+    BX.listenSetting('show_fps', (v) => { showFps = v === 'true'; $('#fps').hidden = !showFps; });
+}
+function wirePortalEvents() {
+    BX.onPortalEvent((event, data) => {
+        if (event === 'respawn_request') { if (P.dead) actions.revive(false); else if (running) teleportLobby(); }
+        else if (event === 'chat_message_sent' && data) net.send('chat', { text: String(data) });
+        else if (event === 'play_emote' && data) { playEmoteOn(localAvatar, String(data)); net.send('emote', { id: String(data) }); }
+    });
+    BX.onAvatarChanged(() => syncMyAvatar());
+    BX.onProportionsChanged(() => syncMyAvatar());
+}
+// Account chip (HUD) and the start-screen login row
+function showIdentity(id) {
+    const avail = BX.bloxity.ready;
+    $('#bxRow').hidden = !avail;
+    $('#acct').hidden = !avail;
+    if (!avail) return;
+    const label = id.name || 'Guest';
+    $('#bxStatus').textContent = id.loggedIn ? 'Playing as ' + label : 'Guest: ' + label;
+    $('#bxLogin').textContent = id.loggedIn ? 'Log out' : 'Log in with Bloxity';
+    $('#acctName').textContent = label;
+    $('#acctBtn').textContent = id.loggedIn ? 'Log out' : 'Log in';
+    const pfp = $('#acctPfp');
+    pfp.hidden = !id.pfp;
+    if (id.pfp) pfp.src = id.pfp;
+    $('#nameInput').hidden = id.loggedIn;
+    $('#nameLabel').hidden = id.loggedIn;
+    if (!id.loggedIn && !$('#nameInput').value && id.name) $('#nameInput').placeholder = id.name;
+}
+function toggleLogin() { if (BX.identity().loggedIn) BX.logout(); else BX.login(); }
+
 async function boot() {
+    BX.initBloxity();
+    BX.loadingStep('Loading fonts…');
     try { await Promise.race([document.fonts.load('700 40px Fredoka'), new Promise((r) => setTimeout(r, 2500))]); } catch (e) { /* fallback font */ }
+    BX.loadingStep('Building the stadium…');
     buildWorld();
+    loadBase().catch(() => {}); // warm up the Bloxity body model
+    wirePortalSettings();
+    wirePortalEvents();
+    BX.onIdentity((id) => {
+        showIdentity(id);
+        // Logged in after joining: move this session onto the Bloxity profile
+        if (net.room && id.loggedIn && id.token && !net.bloxity) net.send('auth', { token: id.token });
+        if (net.room) { setupLocalAvatar(); syncMyAvatar(); }
+    });
+    $('#bxLogin').addEventListener('click', toggleLogin);
+    $('#acctBtn').addEventListener('click', toggleLogin);
     $('#nameInput').value = storageGet('sfs_name') || '';
     $('#loading').hidden = true;
     $('#joinRow').hidden = false;

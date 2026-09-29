@@ -200,6 +200,16 @@ body.touch #sprintHint { display: none; }
 .sq .ic { transition: transform 0.25s cubic-bezier(0.34, 1.8, 0.5, 1); }
 .sq:hover .ic { transform: rotate(-10deg) scale(1.15); }
 
+#acct { position: absolute; left: calc(max(1rem, env(safe-area-inset-left, 0px)) + 3.6rem); top: calc(env(safe-area-inset-top, 0px) + 0.8rem); display: flex; align-items: center; gap: 0.5rem; background: rgba(22, 18, 31, 0.6); border: 2px solid rgba(255, 255, 255, 0.25); border-radius: 2rem; padding: 0.2rem 0.3rem 0.2rem 0.3rem; max-width: 60vw; }
+#acctPfp { width: 2.2rem; height: 2.2rem; border-radius: 50%; object-fit: cover; background: #2b2442; }
+#acctName { font-size: 1.05rem; font-weight: 700; max-width: 11rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-left: 0.3rem; }
+#acctBtn { font-size: 0.85rem; padding: 0.25rem 0.7rem; border-radius: 1rem; }
+#fps { position: absolute; left: max(1rem, env(safe-area-inset-left, 0px)); top: calc(env(safe-area-inset-top, 0px) + 4.4rem); font-size: 0.9rem; font-weight: 700; color: #7dff6b; font-variant-numeric: tabular-nums; }
+.bx-row { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 0.6rem; font-size: 1.05rem; font-weight: 700; }
+.bx-row .btn { font-size: 1rem; padding: 0.4rem 0.9rem; }
+.invite-row { display: flex; gap: 0.5rem; }
+.invite-row input { flex: 1; min-width: 0; font: 600 0.9rem var(--font); border: 2px solid var(--ink); border-radius: 0.5rem; padding: 0.35rem 0.5rem; background: #f4f0ff; color: var(--ink); }
+.invite-row .btn { font-size: 0.95rem; padding: 0.35rem 0.8rem; }
 #btnSettings { position: absolute; left: max(1rem, env(safe-area-inset-left, 0px)); top: calc(env(safe-area-inset-top, 0px) + 0.8rem); width: 3rem; height: 3rem; border-radius: 50%; font-size: 1.4rem; padding: 0; }
 
 .overlay:not([hidden]) { animation: fadeIn 0.2s ease; }
@@ -273,7 +283,7 @@ body.touch #sprintHint { display: none; }
     <div id="hud" hidden>
         <div id="offer">
             <span class="ic" id="offerIc">🎁</span>
-            <div class="tx"><span class="tt o1" id="offerTitle">OP STARTER PACK</span><span class="sub" id="offerSub">⏰ 15:00 · ONLY R$19</span></div>
+            <div class="tx"><span class="tt o1" id="offerTitle">OP STARTER PACK</span><span class="sub" id="offerSub">⏰ 15:00 · ONLY ⏣19</span></div>
             <button class="btn g-green yes o1" id="offerYes">YES</button>
             <button class="btn g-red no o1" id="offerNo">NO</button>
         </div>
@@ -286,6 +296,12 @@ body.touch #sprintHint { display: none; }
         </div>
 
         <button class="btn g-grey o1" id="btnSettings" aria-label="Settings">⚙️</button>
+        <div id="acct" hidden>
+            <img id="acctPfp" alt="" hidden>
+            <span class="o1" id="acctName">Guest</span>
+            <button class="btn g-blue o1" id="acctBtn">Log in</button>
+        </div>
+        <div id="fps" class="o1 passive" hidden>60 FPS</div>
         <div id="flash" class="passive" aria-hidden="true"></div>
         <div id="goalBanner" class="passive" hidden><div class="rays"></div><div class="goal o">GOAL!</div><div class="sub o" id="goalSub">+1 Wins</div></div>
 
@@ -294,6 +310,8 @@ body.touch #sprintHint { display: none; }
             <button class="btn sq g-purple" id="btnAuras"><span class="ic">✨</span><span class="lb o1">Auras</span></button>
             <button class="btn sq g-green" id="btnFree"><span class="ic">🎁</span><span class="lb o1">FREE</span><span class="badge" id="freeBadge" hidden>!</span></button>
             <button class="btn sq g-yellow" id="btnStore"><span class="ic">🛒</span><span class="lb o1">Store</span></button>
+            <button class="btn sq g-pink" id="btnFriends"><span class="ic">👥</span><span class="lb o1">Friends</span></button>
+            <button class="btn sq g-blue" id="btnWardrobe"><span class="ic">👕</span><span class="lb o1">Avatar</span></button>
         </div>
 
         <div id="rightCol">
@@ -302,10 +320,10 @@ body.touch #sprintHint { display: none; }
                 <div class="row"><input id="speedInput" type="number" inputmode="numeric" min="16" value="16"></div>
                 <small id="maxSpeedTxt">Max: 16</small>
             </div>
-            <button class="btn pbtn g-pink" id="btn2x"><span class="o1">⚡ 2x Speed</span><span class="price" id="price2x">R$3</span></button>
-            <button class="btn pbtn g-yellow" data-product="Speed10K"><span class="o1">👟 +10K</span><span class="price">R$29</span></button>
-            <button class="btn pbtn g-yellow" data-product="Speed100K"><span class="o1">👟 +100K</span><span class="price">R$79</span></button>
-            <button class="btn pbtn g-yellow" data-product="Speed1M"><span class="o1">👟 +1M</span><span class="price">R$149</span></button>
+            <button class="btn pbtn g-pink" id="btn2x"><span class="o1">⚡ 2x Speed</span><span class="price" id="price2x">⏣3</span></button>
+            <button class="btn pbtn g-yellow" data-product="Speed10K"><span class="o1">👟 +10K</span><span class="price">⏣29</span></button>
+            <button class="btn pbtn g-yellow" data-product="Speed100K"><span class="o1">👟 +100K</span><span class="price">⏣79</span></button>
+            <button class="btn pbtn g-yellow" data-product="Speed1M"><span class="o1">👟 +1M</span><span class="price">⏣149</span></button>
         </div>
 
         <div id="boost" class="o passive" hidden></div>
@@ -340,8 +358,8 @@ body.touch #sprintHint { display: none; }
             <header><h2 class="o" id="buyTitle">Buy item</h2></header>
             <div class="buy-body">
                 <div class="item o1" id="buyItem">2x Speed</div>
-                <div class="cost o1" id="buyCost">R$ 3</div>
-                <p class="note">Web demo: purchases are free here. In the Roblox game this costs Robux.</p>
+                <div class="cost o1" id="buyCost">⏣ 3</div>
+                <p class="note">Web demo: purchases are free here. On Bloxity they are paid with Bux.</p>
                 <div class="acts"><button class="btn g-green o1" id="buyOk">Buy</button><button class="btn g-grey o1" id="buyCancel">Cancel</button></div>
             </div>
         </div>
@@ -353,7 +371,7 @@ body.touch #sprintHint { display: none; }
             <div class="buy-body">
                 <div class="item o1">Revive where you fell?</div>
                 <div id="reviveTimer">Returning to lobby in 10s</div>
-                <div class="acts"><button class="btn g-green o1" id="reviveYes">9 Robux</button><button class="btn g-red o1" id="reviveNo">No!</button></div>
+                <div class="acts"><button class="btn g-green o1" id="reviveYes">⏣ 9</button><button class="btn g-red o1" id="reviveNo">No!</button></div>
             </div>
         </div>
     </div>
@@ -375,7 +393,11 @@ body.touch #sprintHint { display: none; }
             <h1 class="logo o"><span class="a">SPEED FOOTBALL</span><span class="b">SCAPE</span></h1>
             <div id="loading" class="o1">Loading…</div>
             <div class="join" id="joinRow" hidden>
-                <label class="o1" for="nameInput">Your name</label>
+                <div class="bx-row" id="bxRow" hidden>
+                    <span class="o1" id="bxStatus">Guest</span>
+                    <button class="btn g-blue o1" id="bxLogin">Log in with Bloxity</button>
+                </div>
+                <label class="o1" id="nameLabel" for="nameInput">Your name</label>
                 <input id="nameInput" maxlength="20" placeholder="Player name" autocomplete="nickname">
                 <button class="btn g-green play o" id="playBtn">PLAY</button>
             </div>
@@ -384,11 +406,12 @@ body.touch #sprintHint { display: none; }
                 <span><kbd>WASD</kbd>Move</span><span><kbd>Space</kbd>Jump</span><span><kbd>Shift</kbd>Sprint</span><span><kbd>E</kbd>Interact</span><span><kbd>Drag</kbd>Camera</span><span><kbd>Wheel</kbd>Zoom</span>
             </div>
             <div class="pad-hint o1" id="padHint" hidden>🎮 Controller connected · press <kbd>A</kbd> to play</div>
-            <p class="demo-note o1">Multiplayer. Run to gain Speed, escape the stages for Wins and race other players on the leaderboards. Robux buttons are free in this demo.</p>
+            <p class="demo-note o1">Multiplayer. Run to gain Speed, escape the stages for Wins and race other players on the leaderboards. Log in with Bloxity to play with your avatar and friends.</p>
         </div>
     </div>
 </div>
 
+<script src="https://sdk.bloxity.io/v1/legion-sdk.min.js"></script>
 <script type="module" src="/src/main.js"></script>
 </body>
 </html>

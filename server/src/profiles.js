@@ -45,6 +45,15 @@ export function getProfile(uid, name, fallbackName) {
     return p;
 }
 
+export function hasProfile(uid) { return profiles.has(uid); }
+// First Bloxity login on a browser that already played as a guest keeps that progress
+export function adoptGuestProgress(legionUid, guestUid, name) {
+    if (profiles.has(legionUid) || !guestUid || !profiles.has(guestUid)) return;
+    const g = profiles.get(guestUid);
+    profiles.set(legionUid, { ...JSON.parse(JSON.stringify(g)), uid: legionUid, name: name || g.name });
+    dirty = true;
+}
+
 export function markDirty() { dirty = true; }
 export function allProfiles() { return profiles.values(); }
 

@@ -1,5 +1,6 @@
 import { $ } from './engine.js';
 import { S, actions, net } from './state.js';
+import * as BX from './bloxity.js';
 import { sfx, getVolumes, setVolume } from './audio.js';
 import { QUALITIES, getQuality, setQuality } from './fx.js';
 import {
@@ -45,7 +46,7 @@ export function updateHud(P, online) {
     const max = maxSpeedFor(S.level, S.rebirths);
     el.maxSpeed.textContent = 'Max: ' + max;
     if (document.activeElement !== el.input) el.input.value = S.customSpeed > 0 && S.customSpeed <= max ? S.customSpeed : max;
-    el.price2x.textContent = S.passes.DoubleSpeed ? 'OWNED' : 'R$' + PASSES.DoubleSpeed.price;
+    el.price2x.textContent = S.passes.DoubleSpeed ? 'OWNED' : '⏣' + PASSES.DoubleSpeed.price;
     const boostLeft = (S.boostUntil - net.now()) / 1000;
     el.boost.hidden = boostLeft <= 0;
     if (boostLeft > 0) el.boost.textContent = '⚡ x' + CFG.boostMult + ' SPEED BOOST ' + clock(boostLeft);
@@ -68,7 +69,7 @@ function updateOffer() {
     el.offerIc.textContent = o.ic;
     el.offerTitle.textContent = o.title;
     const price = o.kind === 'pass' ? PASSES[o.key].price : PRODUCTS[o.key].price;
-    el.offerSub.textContent = (o.key === 'StarterPack' ? '⏰ ' + clock(packLeft) + ' · ' : '') + 'ONLY R$' + price;
+    el.offerSub.textContent = (o.key === 'StarterPack' ? '⏰ ' + clock(packLeft) + ' · ' : '') + 'ONLY ⏣' + price;
     el.offer.dataset.kind = o.kind; el.offer.dataset.key = o.key;
 }
 $('#offerYes').addEventListener('click', () => buy(el.offer.dataset.kind, el.offer.dataset.key));
@@ -115,10 +116,18 @@ export function buy(kind, key) {
     if (kind === 'pass' && S.passes[key]) { toast(PASSES[key].name + ' already owned!', '#6fe0ff'); return; }
     const item = kind === 'pass' ? PASSES[key] : PRODUCTS[key];
     if (!item) return;
+    if (net.bux) { buyBux(kind, key); return; }
     pendingBuy = { kind, key };
     $('#buyItem').textContent = item.name;
-    $('#buyCost').textContent = 'R$ ' + item.price;
+    $('#buyCost').textContent = '⏣ ' + item.price;
     $('#buy').hidden = false;
+}
+// Bloxity shows its own confirm modal; the grant arrives from the server after its webhook
+async function buyBux(kind, key) {
+    const r = await BX.buyWithBux(kind, key);
+    if (r.success) { toast('Purchase complete!', '#7dff6b'); return; }
+    if (key === 'Revive') actions.revive(false);
+    if (r.error && !/cancel/i.test(r.error)) toast(r.error, '#ff5a5a');
 }
 $('#buyOk').addEventListener('click', () => {
     $('#buy').hidden = true;
@@ -164,6 +173,10 @@ $('#btnRebirth').addEventListener('click', () => openModal('rebirth'));
 $('#btnAuras').addEventListener('click', () => openModal('auras'));
 $('#btnFree').addEventListener('click', () => openModal('free'));
 $('#btnStore').addEventListener('click', () => openModal('store'));
+$('#btnFriends').addEventListener('click', () => openModal('friends'));
+$('#btnWardrobe').addEventListener('click', () => {
+    if (BX.bloxity.ready) BX.showCustomizer(); else toast('Bloxity avatars are not available right now', '#ffb51c');
+});
 $('#btnSettings').addEventListener('click', () => openModal('settings'));
 // Every chunky button clicks
 document.addEventListener('pointerdown', (e) => { if (e.target.closest && e.target.closest('.btn')) sfx('click'); });
@@ -233,17 +246,20 @@ function renderModal() {
         for (const a of AURAS) {
             const owned = S.auras[a.id] || (a.pass ? S.passes[a.pass] : S.wins >= a.req);
             const on = S.aura === a.id;
-            const desc = 'x' + a.mult + ' Speed · ' + (a.pass ? 'R$' + PASSES[a.pass].price : '🏆 ' + fmt(a.req) + ' Wins');
+            const desc = 'x' + a.mult + ' Speed · ' + (a.pass ? '⏣' + PASSES[a.pass].price : '🏆 ' + fmt(a.req) + ' Wins');
             let btn, cls, fn;
             if (on) { btn = 'Unequip'; cls = 'g-grey'; fn = () => net.send('aura', { id: '' }); }
             else if (owned) { btn = 'Equip'; cls = 'g-green'; fn = () => net.send('aura', { id: a.id }); }
-            else if (a.pass) { btn = 'R$' + PASSES[a.pass].price; cls = 'g-pink'; fn = () => buy('pass', a.pass); }
+            else if (a.pass) { btn = '⏣' + PASSES[a.pass].price; cls = 'g-pink'; fn = () => buy('pass', a.pass); }
             else { btn = '🔒 Locked'; cls = 'g-grey'; fn = () => toast('Need ' + fmt(a.req - S.wins) + ' more Wins!', '#ff5a5a'); }
             body.appendChild(rowCard(a.ic, a.name, desc, btn, cls, fn));
         }
     } else if (modalKind === 'free') {
         title.textContent = 'FREE Rewards';
         renderFree();
+    } else if (modalKind === 'friends') {
+        title.textContent = 'Friends';
+        renderFriends(body);
     } else if (modalKind === 'settings') {
         title.textContent = 'Settings';
         renderSettings(body);
@@ -252,16 +268,60 @@ function renderModal() {
         body.appendChild(sec('Speed'));
         for (const k of ['Speed10K', 'Speed100K', 'Speed1M']) {
             const p = PRODUCTS[k];
-            body.appendChild(rowCard('👟', p.name, 'Instant Speed', 'R$' + p.price, 'g-yellow', () => buy('product', k)));
+            body.appendChild(rowCard('👟', p.name, 'Instant Speed', '⏣' + p.price, 'g-yellow', () => buy('product', k)));
         }
-        body.appendChild(rowCard('⏱️', 'x2 Speed Boost', '15 minutes of double Speed', 'R$' + PRODUCTS.SpeedBoost.price, 'g-yellow', () => buy('product', 'SpeedBoost')));
+        body.appendChild(rowCard('⏱️', 'x2 Speed Boost', '15 minutes of double Speed', '⏣' + PRODUCTS.SpeedBoost.price, 'g-yellow', () => buy('product', 'SpeedBoost')));
         body.appendChild(sec('Game passes'));
         for (const k of Object.keys(PASSES)) {
             const p = PASSES[k], owned = !!S.passes[k];
-            body.appendChild(rowCard(p.ic, p.name, p.desc, owned ? 'OWNED' : 'R$' + p.price, owned ? 'g-grey' : 'g-green', () => buy('pass', k), owned));
+            body.appendChild(rowCard(p.ic, p.name, p.desc, owned ? 'OWNED' : '⏣' + p.price, owned ? 'g-grey' : 'g-green', () => buy('pass', k), owned));
         }
     }
 }
+// Bloxity friends with presence, a shareable invite link and per-friend invites
+function renderFriends(body) {
+    const note = (text) => { const p = document.createElement('p'); p.className = 'set-note'; p.textContent = text; body.appendChild(p); return p; };
+    if (!BX.bloxity.ready) { note('Bloxity is not available right now.'); return; }
+    const id = BX.identity();
+    const link = document.createElement('div');
+    link.className = 'invite-row';
+    link.innerHTML = '<input id="inviteLink" readonly aria-label="Invite link"><button class="btn g-green o1" id="copyInvite">Copy link</button>';
+    body.appendChild(link);
+    const input = link.querySelector('input');
+    input.value = BX.getInviteLink();
+    link.querySelector('button').addEventListener('click', async () => {
+        input.select();
+        try { await navigator.clipboard.writeText(input.value); toast('Invite link copied!', '#7dff6b'); }
+        catch (e) { document.execCommand && document.execCommand('copy'); toast('Select the link and copy it', '#ffb51c'); }
+    });
+    if (!id.loggedIn) {
+        note('Log in with Bloxity to see your friends and invite them into this server.');
+        const b = document.createElement('button');
+        b.className = 'btn g-blue o1'; b.textContent = 'Log in with Bloxity';
+        b.addEventListener('click', () => BX.login());
+        body.appendChild(b);
+        return;
+    }
+    const loading = note('Loading friends…');
+    BX.getFriends().then((friends) => {
+        if (modalKind !== 'friends') return;
+        loading.remove();
+        if (!friends.length) { note('No friends yet. Share the invite link above!'); return; }
+        const order = { 'in-game': 0, online: 1, away: 2, offline: 3 };
+        friends.sort((a, b) => (order[a.presence && a.presence.status] ?? 4) - (order[b.presence && b.presence.status] ?? 4));
+        for (const f of friends) {
+            const st = (f.presence && f.presence.status) || 'offline';
+            const where = st === 'in-game' && f.presence.gameName ? 'Playing ' + f.presence.gameName : st;
+            const dot = st === 'offline' ? '⚫' : st === 'away' ? '🟡' : '🟢';
+            body.appendChild(rowCard(dot, f.displayName || f.username, where, 'Invite', 'g-green', async (e) => {
+                e.currentTarget.disabled = true;
+                const ok = await BX.inviteFriend(f._id);
+                toast(ok ? 'Invite sent to ' + (f.displayName || f.username) : 'Could not send the invite', ok ? '#7dff6b' : '#ff5a5a');
+            }));
+        }
+    });
+}
+
 function renderFree() {
     const body = $('#modalBody');
     body.innerHTML = '';

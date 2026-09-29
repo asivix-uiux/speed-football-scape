@@ -1,6 +1,7 @@
 import { Room } from 'colyseus';
 import { GameState, PlayerState } from './schema.js';
-import { getProfile, markDirty, allProfiles, saveProfiles } from './profiles.js';
+import { getProfile, markDirty, allProfiles, saveProfiles, adoptGuestProgress } from './profiles.js';
+import { verifyBloxityToken, BUX_MODE } from './bloxity.js';
 import {
     CFG, STAGES, PORTALS, PRODUCTS, PASSES, SOCCER, soccerById, AURAS, auraById, FREE, KITS, SKINS,
     xpFor, maxSpeedFor, speedMult, treadmillAt, stageAt, fmt, clamp,
@@ -14,6 +15,11 @@ function cleanName(name) {
 }
 const randomName = () => 'Player' + Math.floor(1000 + Math.random() * 9000);
 const finite = (v) => typeof v === 'number' && Number.isFinite(v);
+// Guest ids come from the browser; they can never claim a Bloxity identity
+const guestUid = (uid, fallback) => String(uid || fallback).replace(/^legion_/, 'guest_').slice(0, 64);
+const cleanAvatar = (av) => (typeof av === 'string' && av.length <= 2000 ? av : '');
+
+export const liveRooms = new Set();
 
 // One shared world: lobby + the 6-stage course. Movement is client-side,
 // everything that changes progress (Speed, Wins, unlocks, purchases) is decided here.
@@ -21,6 +27,7 @@ export class SpeedRoom extends Room {
     maxClients = CFG.maxPlayers;
 
     onCreate() {
+        liveRooms.add(this);
         this.setState(new GameState());
         this.setPatchRate(50);
         this.sessions = new Map();
@@ -37,16 +44,34 @@ export class SpeedRoom extends Room {
         this.onMessage('free', (client, m) => this.onFree(client, m));
         this.onMessage('buy', (client, m) => this.onBuy(client, m));
         this.onMessage('custom', (client, m) => this.onCustom(client, m));
+        this.onMessage('auth', (client, m) => this.onBloxityLogin(client, m));
+        this.onMessage('avatar', (client, m) => this.onAvatar(client, m));
+        this.onMessage('emote', (client, m) => this.onEmote(client, m));
+        this.onMessage('chat', (client, m) => this.onChat(client, m));
 
         this.setSimulationInterval((dt) => this.tick(dt), 100);
         this.clock.setInterval(() => this.broadcastBoards(), 10000);
     }
 
-    onJoin(client, options) {
-        const uid = String((options && options.uid) || client.sessionId).slice(0, 64);
-        const profile = getProfile(uid, cleanName(options && options.name), randomName());
+    // A Bloxity token is verified with the Bloxity API; anyone else joins as a guest
+    async onAuth(client, options) {
+        const legion = options && options.token ? await verifyBloxityToken(options.token) : null;
+        return legion ? { legion } : { guest: true };
+    }
+
+    onJoin(client, options, auth) {
+        options = options || {};
+        const guest = guestUid(options.uid, client.sessionId);
+        let uid = guest, name = cleanName(options.name);
+        if (auth && auth.legion) {
+            uid = 'legion_' + auth.legion.id;
+            name = cleanName(auth.legion.name) || name;
+            adoptGuestProgress(uid, guest, name);
+        }
+        const profile = getProfile(uid, name, randomName());
         const player = new PlayerState();
         player.name = profile.name;
+        player.av = cleanAvatar(options.av);
         player.x = 0; player.y = 0.5; player.z = -14; player.ry = 0;
         player.kit = this.joinCount % KITS.length;
         player.skin = (this.joinCount * 3) % SKINS.length;
@@ -55,10 +80,10 @@ export class SpeedRoom extends Room {
         this.sessions.set(client.sessionId, {
             client, profile, player,
             moving: false, lastMove: 0, gainT: 0,
-            joinedAt: Date.now(), freeClaimed: {}, cooldowns: new Map(),
+            joinedAt: Date.now(), freeClaimed: {}, cooldowns: new Map(), guest, lastChat: 0,
         });
         this.syncPublic(client.sessionId);
-        client.send('hello', { now: Date.now() });
+        client.send('hello', { now: Date.now(), bux: BUX_MODE, bloxity: uid.startsWith('legion_') });
         this.sendProfile(client.sessionId);
         this.broadcastBoards(client);
     }
@@ -69,7 +94,7 @@ export class SpeedRoom extends Room {
         markDirty();
     }
 
-    onDispose() { saveProfiles(); }
+    onDispose() { liveRooms.delete(this); saveProfiles(); }
 
     // ----- helpers -----
     syncPublic(id) {
@@ -273,15 +298,23 @@ export class SpeedRoom extends Room {
         this.changed(client.sessionId);
     }
 
-    // Web demo: every purchase is granted for free. Hook real payments in here.
+    // Demo mode grants for free. In Bux mode (LEGION_WEBHOOK_SECRET set) only the webhook grants.
     onBuy(client, m) {
         const s = this.sessions.get(client.sessionId);
         if (!s || !m) return;
+        if (BUX_MODE) return this.toast(s, 'Purchases use Bux - log in to Bloxity', BLUE);
+        this.grant({ ...s, id: client.sessionId }, m.kind, m.key);
+    }
+
+    // s is a live session, or a stand-in { profile, client: { send() {} } } for offline players
+    grant(s, kind, key) {
+        const m = { kind, key };
+        const client = s.client;
         const p = s.profile;
         if (m.kind === 'pass') {
             const pass = PASSES[m.key];
-            if (!pass) return;
-            if (p.passes[m.key]) return this.toast(s, pass.name + ' already owned!', BLUE);
+            if (!pass) return false;
+            if (p.passes[m.key]) { this.toast(s, pass.name + ' already owned!', BLUE); return true; }
             p.passes[m.key] = true;
             const d = SOCCER.find((x) => x.pass === m.key);
             if (d) { p.owned[d.id] = true; p.equipped = d.id; }
@@ -290,21 +323,22 @@ export class SpeedRoom extends Room {
             this.toast(s, pass.name + ' unlocked!', GREEN);
         } else {
             const prod = PRODUCTS[m.key];
-            if (!prod) return;
-            if (m.key === 'Revive') { client.send('revived', {}); return; }
+            if (!prod) return false;
+            if (m.key === 'Revive') { client.send('revived', {}); return true; }
             if (m.key === 'SpeedBoost') {
                 p.boostUntil = Math.max(Date.now(), p.boostUntil) + CFG.boostMinutes * 60000;
                 this.toast(s, 'x2 Speed Boost active!', GOLD);
             }
             if (m.key === 'StarterPack') {
-                if (p.claimedPack) return this.toast(s, 'Starter Pack already claimed!', BLUE);
+                if (p.claimedPack) { this.toast(s, 'Starter Pack already claimed!', BLUE); return true; }
                 p.claimedPack = true;
             }
             if (prod.speed) { this.addSpeed(s, prod.speed, false); this.toast(s, '+' + fmt(prod.speed) + ' Speed!', GREEN); }
             if (prod.wins) { this.addWins(s, prod.wins, false); this.toast(s, '+' + prod.wins + ' Wins!', GOLD); }
         }
         client.send('fx', { kind: 'confetti' });
-        this.changed(client.sessionId);
+        if (s.id) this.changed(s.id); else markDirty();
+        return true;
     }
 
     onCustom(client, m) {
@@ -317,4 +351,56 @@ export class SpeedRoom extends Room {
         this.toast(s, 'Walk speed set to ' + (p.customSpeed || max), BLUE);
         this.changed(client.sessionId);
     }
+
+    // ----- Bloxity -----
+    // Logged in to Bloxity after joining: move this session onto the Bloxity profile
+    async onBloxityLogin(client, m) {
+        const s = this.sessions.get(client.sessionId);
+        if (!s || !m || s.authing) return;
+        s.authing = true;
+        const legion = await verifyBloxityToken(m.token);
+        s.authing = false;
+        if (!legion || !this.sessions.has(client.sessionId)) return;
+        const uid = 'legion_' + legion.id;
+        if (s.profile.uid === uid) return;
+        const name = cleanName(legion.name) || s.profile.name;
+        adoptGuestProgress(uid, s.profile.uid, name);
+        s.profile = getProfile(uid, name, randomName());
+        s.player.name = s.profile.name;
+        this.changed(client.sessionId);
+        client.send('authed', { name: s.profile.name });
+        this.toast(s, 'Logged in as ' + s.profile.name, GREEN);
+        this.broadcastBoards();
+    }
+    onAvatar(client, m) {
+        const s = this.sessions.get(client.sessionId);
+        if (s && m) s.player.av = cleanAvatar(m.av);
+    }
+    // Emote ids are opaque catalogue ids; other players play the same clip
+    onEmote(client, m) {
+        const s = this.sessions.get(client.sessionId);
+        if (!s || !m || typeof m.id !== 'string' || m.id.length > 40) return;
+        this.broadcast('emote', { s: client.sessionId, id: m.id }, { except: client });
+    }
+    onChat(client, m) {
+        const s = this.sessions.get(client.sessionId);
+        if (!s || !m || typeof m.text !== 'string') return;
+        const now = Date.now();
+        if (now - s.lastChat < 800) return;
+        s.lastChat = now;
+        const text = m.text.replace(/\s+/g, ' ').trim().slice(0, 120);
+        if (text) this.broadcast('chat', { s: client.sessionId, name: s.profile.name, text });
+    }
+}
+
+// Grants a Bux purchase confirmed by the Bloxity webhook, whether or not the player is online
+export function grantPurchase(uid, name, kind, key) {
+    for (const room of liveRooms) {
+        for (const [id, s] of room.sessions) {
+            if (s.profile.uid === uid) return room.grant({ ...s, id }, kind, key);
+        }
+    }
+    const profile = getProfile(uid, name, randomName());
+    const stub = { profile, client: { send() {} } };
+    return SpeedRoom.prototype.grant.call({ toast() {}, addSpeed: SpeedRoom.prototype.addSpeed, addWins: SpeedRoom.prototype.addWins, changed() {} }, stub, kind, key);
 }
