@@ -29,3 +29,6 @@ Scripts/
 Include/
 pyvenv.cfg
 reference/*.mp4
+
+# Saved third-party pages (Bloxity docs / test game), kept locally only
+reference/bloxity-*
