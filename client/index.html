@@ -176,12 +176,83 @@ body.touch #sprintHint { display: none; }
 @media (prefers-reduced-motion: reduce) {
     .toast, #levelBanner.show { animation-duration: 0.01s; animation-delay: 0s; }
 }
+
+/* ---------- Premium polish ---------- */
+#speedLines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.btn { transition: transform 0.18s cubic-bezier(0.34, 1.8, 0.5, 1), filter 0.15s ease, box-shadow 0.15s ease; }
+.btn:hover:not(:disabled) { transform: translateY(-2px) scale(1.05); filter: brightness(1.08); }
+.btn:active:not(:disabled) { transform: translateY(2px) scale(0.94); transition-duration: 0.06s; }
+.sq .ic { transition: transform 0.25s cubic-bezier(0.34, 1.8, 0.5, 1); }
+.sq:hover .ic { transform: rotate(-10deg) scale(1.15); }
+
+#btnSettings { position: absolute; left: max(1rem, env(safe-area-inset-left, 0px)); top: calc(env(safe-area-inset-top, 0px) + 0.8rem); width: 3rem; height: 3rem; border-radius: 50%; font-size: 1.4rem; padding: 0; }
+
+.overlay:not([hidden]) { animation: fadeIn 0.2s ease; }
+.overlay:not([hidden]) .panel { animation: popIn 0.34s cubic-bezier(0.2, 1.5, 0.4, 1); }
+@keyframes fadeIn { from { opacity: 0; } }
+@keyframes popIn { from { opacity: 0; transform: scale(0.8) translateY(1rem); } }
+
+#offer { overflow: hidden; animation: offerFloat 3.2s ease-in-out infinite; }
+#offer::after { content: ""; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 35%, rgba(255, 255, 255, 0.35) 50%, transparent 65%); transform: translateX(-120%); animation: shine 3.5s ease-in-out infinite; pointer-events: none; }
+@keyframes shine { 0%, 55% { transform: translateX(-120%); } 85%, 100% { transform: translateX(120%); } }
+@keyframes offerFloat { 0%, 100% { translate: 0 0; } 50% { translate: 0 -0.2rem; } }
+
+.stat.bump { animation: bump 0.45s cubic-bezier(0.34, 1.8, 0.5, 1); }
+@keyframes bump { 0% { transform: scale(1); } 35% { transform: scale(1.25); background: rgba(255, 208, 40, 0.5); } 100% { transform: scale(1); } }
+
+.bar .fill::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(115deg, rgba(255, 255, 255, 0.18) 0 0.5rem, transparent 0.5rem 1rem); background-size: 2.3rem 100%; animation: stripes 1.2s linear infinite; }
+@keyframes stripes { to { background-position: 2.3rem 0; } }
+
+#stageTitle.show .n { animation: slideIn 0.55s cubic-bezier(0.2, 1.4, 0.4, 1) both; }
+#stageTitle.show .s { animation: slideIn 0.55s 0.12s cubic-bezier(0.2, 1.4, 0.4, 1) both; }
+@keyframes slideIn { from { opacity: 0; transform: translateX(-3rem) skewX(-12deg); } }
+
+#flash { position: absolute; inset: 0; pointer-events: none; opacity: 0; background: radial-gradient(circle at 50% 55%, rgba(125, 255, 107, 0.45), rgba(125, 255, 107, 0) 60%); }
+#flash.show { animation: flash 0.7s ease-out; }
+@keyframes flash { 0% { opacity: 1; } 100% { opacity: 0; } }
+
+#goalBanner { position: absolute; left: 50%; top: 38%; transform: translate(-50%, -50%); display: grid; justify-items: center; pointer-events: none; }
+#goalBanner .goal { font-size: clamp(4rem, 16vw, 9rem); font-weight: 700; line-height: 1; color: var(--yellow); letter-spacing: 0.02em; }
+#goalBanner .sub { font-size: 2.2rem; font-weight: 700; color: var(--green); }
+#goalBanner .rays { position: absolute; left: 50%; top: 50%; width: 36rem; height: 36rem; margin: -18rem 0 0 -18rem; border-radius: 50%; background: repeating-conic-gradient(rgba(255, 208, 40, 0.28) 0 10deg, transparent 10deg 20deg); mask-image: radial-gradient(circle, #000 20%, transparent 68%); -webkit-mask-image: radial-gradient(circle, #000 20%, transparent 68%); animation: spin 6s linear infinite; z-index: -1; }
+#goalBanner.show .goal { animation: goalIn 0.7s cubic-bezier(0.2, 1.6, 0.4, 1) both, goalOut 0.4s 2.2s ease-in forwards; }
+#goalBanner.show .sub { animation: subIn 0.5s 0.25s cubic-bezier(0.2, 1.5, 0.4, 1) both, goalOut 0.4s 2.2s ease-in forwards; }
+#goalBanner.show .rays { animation: spin 6s linear infinite, raysIn 0.6s ease-out both, goalOut 0.4s 2.2s ease-in forwards; }
+@keyframes goalIn { from { opacity: 0; transform: scale(3) rotate(-12deg); } }
+@keyframes subIn { from { opacity: 0; transform: translateY(1.5rem); } }
+@keyframes raysIn { from { opacity: 0; transform: scale(0.3); } }
+@keyframes goalOut { to { opacity: 0; transform: scale(0.85); } }
+@keyframes spin { to { rotate: 360deg; } }
+
+.toast { animation: toast 2.4s cubic-bezier(0.2, 1.4, 0.4, 1) forwards; }
+@keyframes toast { 0% { opacity: 0; transform: translateY(1rem) scale(0.7); } 10% { opacity: 1; transform: none; } 80% { opacity: 1; } 100% { opacity: 0; transform: translateY(-0.8rem); } }
+
+.logo { animation: logoFloat 3s ease-in-out infinite; }
+.tag { animation: wiggle 2.6s ease-in-out infinite; }
+.play:not(:disabled) { animation: pulse 1.6s ease-in-out infinite; }
+@keyframes logoFloat { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-0.5rem); } }
+@keyframes wiggle { 0%, 100% { transform: rotate(-3deg); } 50% { transform: rotate(3deg) scale(1.05); } }
+@keyframes pulse { 0%, 100% { box-shadow: inset 0 -0.3rem 0 rgba(0, 0, 0, 0.22), 0 0.2rem 0 var(--ink), 0 0 0 0 rgba(125, 255, 107, 0.6); } 50% { box-shadow: inset 0 -0.3rem 0 rgba(0, 0, 0, 0.22), 0 0.2rem 0 var(--ink), 0 0 0 0.8rem rgba(125, 255, 107, 0); } }
+
+.settings { display: grid; gap: 1rem; }
+.set-row { display: grid; grid-template-columns: 9rem 1fr; align-items: center; gap: 0.8rem; font-size: 1.15rem; font-weight: 700; }
+.set-row input[type=range] { width: 100%; accent-color: var(--green); height: 1.4rem; }
+.seg { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.seg .btn { font-size: 1rem; padding: 0.35rem 0.8rem; }
+.set-note { margin: 0; font-size: 0.9rem; color: #cfc4f2; }
+@media (max-width: 480px) { .set-row { grid-template-columns: 1fr; } }
+
+@media (prefers-reduced-motion: reduce) {
+    .logo, .tag, .play, #offer, #offer::after, .bar .fill::after, #goalBanner .rays { animation: none !important; }
+    .btn, .sq .ic { transition: none; }
+}
 </style>
 </head>
 <body>
 
 <div id="app">
     <canvas id="view" tabindex="0" aria-label="Game view"></canvas>
+    <canvas id="speedLines" aria-hidden="true"></canvas>
 
     <div id="hud" hidden>
         <div id="offer">
@@ -197,6 +268,10 @@ body.touch #sprintHint { display: none; }
             <div class="stat"><span class="ic">👥</span><b class="o1" id="onlineVal">1</b></div>
             <div class="stat" id="rebirthStat" hidden><span class="ic">🔄</span><b class="o1" id="rebirthVal">0</b></div>
         </div>
+
+        <button class="btn g-grey o1" id="btnSettings" aria-label="Settings">⚙️</button>
+        <div id="flash" class="passive" aria-hidden="true"></div>
+        <div id="goalBanner" class="passive" hidden><div class="rays"></div><div class="goal o">GOAL!</div><div class="sub o" id="goalSub">+1 Wins</div></div>
 
         <div id="leftCol">
             <button class="btn sq g-blue" id="btnRebirth"><span class="ic">🔄</span><span class="lb o1">Rebirth</span></button>

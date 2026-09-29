@@ -69,7 +69,7 @@ function leaderboard(pos, title, color) {
     const head = new T.Mesh(UNIT, mat(color)); head.scale.set(22, 4, 2); head.position.set(0, 28.5, 0); head.rotation.x = -0.18; g.add(head);
     const cv = document.createElement('canvas'); cv.width = 512; cv.height = 560;
     const tex = texFrom(cv);
-    const scr = new T.Mesh(new T.PlaneGeometry(18, 19.7), new T.MeshBasicMaterial({ map: tex }));
+    const scr = new T.Mesh(new T.PlaneGeometry(18, 19.7), new T.MeshBasicMaterial({ map: tex, toneMapped: false }));
     scr.position.set(0, 16, -0.35); scr.rotation.y = Math.PI; g.add(scr);
     textPlane([{ t: 'Most ' + title.split(' ')[1], c: '#fff', s: '#16121f', px: 60 }], 16, 512, new V3(pos.x, 28.6, pos.z - 1.2), new V3(pos.x, 28.6, pos.z - 10));
     billboard([{ t: title, c: hexCss(color), s: '#ffffff', px: 80 }], 18, 512, new V3(pos.x, 35, pos.z));

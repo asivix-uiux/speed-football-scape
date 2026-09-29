@@ -1,5 +1,7 @@
 import { $ } from './engine.js';
 import { S, actions, net } from './state.js';
+import { sfx, getVolumes, setVolume } from './audio.js';
+import { QUALITIES, getQuality, setQuality } from './fx.js';
 import {
     CFG, PRODUCTS, PASSES, OFFERS, AURAS, FREE, xpFor, maxSpeedFor, fmt, clock, clamp,
 } from '../../shared/config.js';
@@ -14,9 +16,23 @@ const el = {
 export const promptEl = el.prompt, promptTxtEl = el.promptTxt;
 
 // ----- HUD -----
+const shown = { wins: null, speed: null };
+function bump(node) { const s = node.closest('.stat'); s.classList.remove('bump'); void s.offsetWidth; s.classList.add('bump'); }
+// Wins and Speed count up smoothly to their new values
+export function animateCounters(dt) {
+    for (const key of ['wins', 'speed']) {
+        const target = S[key];
+        if (shown[key] === null) shown[key] = target;
+        if (shown[key] === target) continue;
+        if (target > shown[key] && key === 'wins') bump(el[key]);
+        const diff = target - shown[key];
+        shown[key] = Math.abs(diff) < 1 ? target : shown[key] + diff * Math.min(1, dt * 7);
+        if (Math.abs(target - shown[key]) < Math.max(1, target * 0.002)) shown[key] = target;
+        el[key].textContent = fmt(shown[key]);
+    }
+}
+
 export function updateHud(P, online) {
-    el.wins.textContent = fmt(S.wins);
-    el.speed.textContent = fmt(S.speed);
     el.rebStat.hidden = S.rebirths === 0;
     el.reb.textContent = S.rebirths;
     el.online.textContent = online;
@@ -66,7 +82,17 @@ export function toast(text, color) {
     while (box.children.length > 3) box.firstChild.remove();
     setTimeout(() => d.remove(), 2400);
 }
+export function showGoal(n) {
+    const g = $('#goalBanner');
+    $('#goalSub').textContent = '+' + fmt(n) + ' Wins';
+    g.hidden = false;
+    g.classList.remove('show'); void g.offsetWidth; g.classList.add('show');
+    clearTimeout(showGoal.t);
+    showGoal.t = setTimeout(() => { g.hidden = true; }, 2600);
+}
 export function levelUp(a, b) {
+    const f = $('#flash');
+    f.classList.remove('show'); void f.offsetWidth; f.classList.add('show');
     const d = $('#levelBanner');
     d.textContent = '⬆ Level ' + a + ' > ' + b;
     d.classList.remove('show'); void d.offsetWidth; d.classList.add('show');
@@ -76,6 +102,7 @@ export function showStageTitle(s) {
     $('#stageName').textContent = s.name;
     const sub = $('#stageSub'); sub.textContent = s.sub; sub.style.color = s.subColor;
     const t = $('#stageTitle'); t.style.opacity = 1;
+    t.classList.remove('show'); void t.offsetWidth; t.classList.add('show');
     clearTimeout(titleTimer);
     titleTimer = setTimeout(() => { t.style.opacity = 0; }, 2600);
 }
@@ -137,6 +164,33 @@ $('#btnRebirth').addEventListener('click', () => openModal('rebirth'));
 $('#btnAuras').addEventListener('click', () => openModal('auras'));
 $('#btnFree').addEventListener('click', () => openModal('free'));
 $('#btnStore').addEventListener('click', () => openModal('store'));
+$('#btnSettings').addEventListener('click', () => openModal('settings'));
+// Every chunky button clicks
+document.addEventListener('pointerdown', (e) => { if (e.target.closest && e.target.closest('.btn')) sfx('click'); });
+
+function renderSettings(body) {
+    const vols = getVolumes();
+    const w = document.createElement('div');
+    w.className = 'settings';
+    w.innerHTML = `
+        <label class="set-row o1" for="volMusic"><span>🎵 Music</span><input id="volMusic" type="range" min="0" max="100" value="${Math.round(vols.music * 100)}"></label>
+        <label class="set-row o1" for="volSfx"><span>🔊 Sound effects</span><input id="volSfx" type="range" min="0" max="100" value="${Math.round(vols.sfx * 100)}"></label>
+        <div class="set-row o1"><span>✨ Graphics</span><div class="seg" role="radiogroup" aria-label="Graphics quality"></div></div>
+        <p class="set-note">Low turns off glow and shadows for older phones.</p>`;
+    w.querySelector('#volMusic').addEventListener('input', (e) => setVolume('music', e.target.value / 100));
+    w.querySelector('#volSfx').addEventListener('input', (e) => setVolume('sfx', e.target.value / 100));
+    const seg = w.querySelector('.seg');
+    for (const [key, q] of Object.entries(QUALITIES)) {
+        const b = document.createElement('button');
+        b.className = 'btn o1 ' + (getQuality() === key ? 'g-green' : 'g-grey');
+        b.textContent = q.label;
+        b.setAttribute('role', 'radio');
+        b.setAttribute('aria-checked', String(getQuality() === key));
+        b.addEventListener('click', () => { setQuality(key); renderModal(); });
+        seg.appendChild(b);
+    }
+    body.appendChild(w);
+}
 
 function rowCard(ic, name, desc, btnText, btnClass, onClick, disabled) {
     const d = document.createElement('div');
@@ -190,6 +244,9 @@ function renderModal() {
     } else if (modalKind === 'free') {
         title.textContent = 'FREE Rewards';
         renderFree();
+    } else if (modalKind === 'settings') {
+        title.textContent = 'Settings';
+        renderSettings(body);
     } else if (modalKind === 'store') {
         title.textContent = 'Store';
         body.appendChild(sec('Speed'));

@@ -28,10 +28,11 @@ function resize() {
 addEventListener('resize', resize);
 resize();
 
-// Physically based light units: intensities are ~pi times the legacy values
-scene.add(new T.HemisphereLight(0xffffff, 0x6a5f80, 2.5));
-scene.add(new T.AmbientLight(0xffffff, 0.7));
-export const sun = new T.DirectionalLight(0xffffff, 1.9);
+// Lit surfaces stay below 1.0 in the linear buffer so only HDR neon blooms;
+// toneMappingExposure (fx.js) brings the overall brightness back up.
+scene.add(new T.HemisphereLight(0xffffff, 0x6a5f80, 1.6));
+scene.add(new T.AmbientLight(0xffffff, 0.45));
+export const sun = new T.DirectionalLight(0xffffff, 1.2);
 sun.castShadow = true;
 sun.shadow.mapSize.set(1024, 1024);
 Object.assign(sun.shadow.camera, { left: -45, right: 45, top: 45, bottom: -45, near: 1, far: 220 });
@@ -40,6 +41,7 @@ scene.add(sun, sun.target);
 
 // ----- materials & textures -----
 export const UNIT = new T.BoxGeometry(1, 1, 1);
+export const NEON_BOOST = 2.2;
 const matCache = new Map();
 export function mat(color, o) {
     o = o || {};
@@ -47,6 +49,8 @@ export function mat(color, o) {
     let m = matCache.get(key);
     if (!m) {
         m = o.neon ? new T.MeshBasicMaterial({ color }) : new T.MeshLambertMaterial({ color });
+        // Neon is HDR (brighter than 1) so the bloom pass picks it up
+        if (o.neon) m.color.multiplyScalar(NEON_BOOST);
         if (o.opacity && o.opacity < 1) { m.transparent = true; m.opacity = o.opacity; m.depthWrite = false; }
         matCache.set(key, m);
     }
@@ -144,7 +148,7 @@ export function textCanvas(lines, W) {
 export function billboard(lines, worldW, W, pos, parent) {
     W = W || 512;
     const cv = textCanvas(lines, W);
-    const sp = new T.Sprite(new T.SpriteMaterial({ map: texFrom(cv), transparent: true, depthWrite: false }));
+    const sp = new T.Sprite(new T.SpriteMaterial({ map: texFrom(cv), transparent: true, depthWrite: false, toneMapped: false }));
     sp.scale.set(worldW, worldW * cv.height / cv.width, 1);
     if (pos) sp.position.copy(pos);
     sp.userData.set = (nl) => {
@@ -160,7 +164,7 @@ export function billboard(lines, worldW, W, pos, parent) {
 export function textPlane(lines, worldW, W, pos, look) {
     const cv = textCanvas(lines, W || 512);
     const h = worldW * cv.height / cv.width;
-    const m = new T.Mesh(new T.PlaneGeometry(worldW, h), new T.MeshBasicMaterial({ map: texFrom(cv), transparent: true, depthWrite: false }));
+    const m = new T.Mesh(new T.PlaneGeometry(worldW, h), new T.MeshBasicMaterial({ map: texFrom(cv), transparent: true, depthWrite: false, toneMapped: false }));
     m.position.copy(pos);
     m.lookAt(look);
     scene.add(m);
@@ -175,7 +179,7 @@ export function signBoard(center, dir, w, h, lines, boardColor) {
     const cv = textCanvas(lines, 1024);
     const th = Math.min(h - 1, (w - 2) * cv.height / cv.width);
     const tw = th * cv.width / cv.height;
-    const tp = new T.Mesh(new T.PlaneGeometry(tw, th), new T.MeshBasicMaterial({ map: texFrom(cv), transparent: true, depthWrite: false }));
+    const tp = new T.Mesh(new T.PlaneGeometry(tw, th), new T.MeshBasicMaterial({ map: texFrom(cv), transparent: true, depthWrite: false, toneMapped: false }));
     tp.position.z = 0.15; g.add(tp);
     scene.add(g);
     return g;
@@ -202,7 +206,7 @@ export function buildRig(d) {
     };
     part(2, 2, 1, 0, 3, 0, d.shirt);
     if (d.stripes) { part(0.35, 2.02, 1.02, -0.5, 3, 0, d.stripes); part(0.35, 2.02, 1.02, 0.5, 3, 0, d.stripes); }
-    const num = new T.Mesh(new T.PlaneGeometry(1.5, 1.5), new T.MeshBasicMaterial({ map: numberTex(d.num || 10, d.numC || '#fff'), transparent: true }));
+    const num = new T.Mesh(new T.PlaneGeometry(1.5, 1.5), new T.MeshBasicMaterial({ map: numberTex(d.num || 10, d.numC || '#fff'), transparent: true, toneMapped: false }));
     num.position.set(0, 3.05, -0.52); num.rotation.y = Math.PI; g.add(num);
     part(1.2, 1.2, 1.2, 0, 4.6, 0, d.skin);
     part(1.3, 0.42, 1.3, 0, 5.15, -0.03, d.hair);
@@ -262,11 +266,11 @@ export function updateAuraFx(fx, aura, t) {
     if (!aura) return;
     const u = fx.userData;
     const rainbow = aura.id === 'Rainbow';
-    u.ringM.color.copy(rainbow ? tmpColor.setHSL((t * 0.3) % 1, 1, 0.6) : tmpColor.set(aura.color));
+    u.ringM.color.copy(rainbow ? tmpColor.setHSL((t * 0.3) % 1, 1, 0.6) : tmpColor.set(aura.color)).multiplyScalar(NEON_BOOST);
     u.ringM.opacity = 0.4 + Math.sin(t * 4) * 0.15;
     u.bits.forEach((b, i) => {
         const ang = t * 2.2 + i * Math.PI / 4;
-        b.material.color.copy(rainbow ? tmpColor.setHSL(((t * 0.3) + i / 8) % 1, 1, 0.6) : tmpColor.set(aura.color));
+        b.material.color.copy(rainbow ? tmpColor.setHSL(((t * 0.3) + i / 8) % 1, 1, 0.6) : tmpColor.set(aura.color)).multiplyScalar(NEON_BOOST);
         b.position.set(Math.cos(ang) * 2.2, 1 + ((i * 0.7 + t * 1.5) % 5), Math.sin(ang) * 2.2);
         b.rotation.set(t * 3, t * 2, 0);
     });

@@ -5,10 +5,12 @@ import {
     floatText, updateEffects, lerpAngle,
 } from './engine.js';
 import { S, actions, net } from './state.js';
+import { initAudio, startMusic, sfx } from './audio.js';
+import { render, setSpeedLines, updateFx, dust, sparkleColumn, ring, fireworks } from './fx.js';
 import { buildWorld, SPAWN, pickups, beltTex, refreshShop, renderBoards, treadLocked, updateSlabs } from './world.js';
 import {
     updateHud, toast, levelUp, showStageTitle, buy, showRevive, hideRevive, closeModal,
-    refreshModal, promptEl, promptTxtEl,
+    refreshModal, promptEl, promptTxtEl, showGoal, animateCounters,
 } from './ui.js';
 import {
     CFG, STAGES, soccerById, auraById, KITS, SKINS, maxSpeedFor, fmt, clamp,
@@ -22,7 +24,11 @@ const P = {
     pos: SPAWN.clone(), vel: new V3(), push: new V3(), onGround: false, ground: null, facing: 0,
     dead: false, shield: 0, stamina: CFG.staminaMax, staminaIdle: 0, sprinting: false,
     lastSafe: SPAWN.clone(), safeTimer: 0, stage: -1, moving: false, animPhase: 0, lockToastT: -9,
+    squash: 1, squashV: 0, airTime: 0, lastStep: 0,
 };
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+let shake = 0;
+function addShake(a) { if (!reduceMotion) shake = Math.min(1.2, shake + a); }
 let rig, auraFx, headLabel, headLabelText = '', follower = null, followerId = null;
 
 function buildPlayer(kit, skin) {
@@ -105,6 +111,7 @@ function die() {
     if (P.dead || P.shield > 0) return;
     P.dead = true;
     burst(P.pos.clone().add(new V3(0, 2.5, 0)), 0x2f7bff);
+    sfx('death'); addShake(0.9);
     resetChase();
     sendMove(true);
     showRevive();
@@ -148,6 +155,7 @@ function updateBalls() {
             P.push.copy(new V3(Math.sign(sx) * 0.55, 0, -1).normalize().multiplyScalar(CFG.ballKnockback));
             P.vel.y = 38; P.onGround = false;
             P.shield = 0.35;
+            sfx('hit'); addShake(0.7);
         }
     }
 }
@@ -181,13 +189,14 @@ actions.enterStage = (idx) => {
     P.stage = idx;
     const s = STAGES[idx];
     showStageTitle(s);
+    sfx('whoosh');
+    if (s.type === 'Chase') setTimeout(() => sfx('whistle'), 300);
     if (s.type === 'Chase') startChase(idx); else resetChase();
     if (S.level < s.rec && S.rebirths === 0) toast('Recommended Level ' + s.rec + '!', '#ffb51c');
 };
 actions.pad = (idx) => {
     sendMove(true);
     net.send('pad', { s: idx });
-    confettiAt(P.pos.clone().add(new V3(0, 4, 0)));
     teleportLobby();
 };
 actions.portal = (p) => net.send('portal', { stage: p.stage });
@@ -309,19 +318,34 @@ async function connect(name) {
         refreshShop(); refreshFollower(); refreshModal();
     });
     room.onMessage('toast', (m) => toast(m.text, m.color));
-    room.onMessage('levelUp', (m) => levelUp(m.from, m.to));
-    room.onMessage('gain', (m) => {
-        if (m.pickup) floatText('+' + fmt(m.n) + ' Speed', '#7dff6b', P.pos.clone().add(new V3(0, 6, 0)));
-        else if (m.tread) floatText('+' + fmt(m.n), '#c28cff', P.pos.clone().add(new V3(0, 7, 0)));
+    room.onMessage('levelUp', (m) => {
+        levelUp(m.from, m.to);
+        sfx('levelUp');
+        ring(P.pos, 0x46ec50, 10, 0.8);
+        sparkleColumn(P.pos, 0x7dff6b);
     });
-    room.onMessage('wins', (m) => { toast('+' + m.n + ' Wins!', '#ffd028'); refreshShop(); });
+    room.onMessage('gain', (m) => {
+        if (m.pickup) { floatText('+' + fmt(m.n) + ' Speed', '#7dff6b', P.pos.clone().add(new V3(0, 6, 0))); sfx('pickup'); }
+        else if (m.tread) { floatText('+' + fmt(m.n), '#c28cff', P.pos.clone().add(new V3(0, 7, 0))); sfx('gain'); }
+    });
+    room.onMessage('wins', (m) => {
+        refreshShop();
+        showGoal(m.n);
+        sfx('cheer');
+        confettiAt(P.pos.clone().add(new V3(0, 4, 0)));
+        fireworks(P.pos, 6, () => sfx('firework'));
+    });
     room.onMessage('portalOk', (m) => {
         const idx = m.stage - 1;
         teleport(new V3(0, 0.5, STAGES[idx].zS + 8), 0);
         actions.enterStage(idx);
     });
     room.onMessage('revived', () => actions.revive(true));
-    room.onMessage('fx', () => confettiAt(P.pos.clone().add(new V3(0, 4, 0))));
+    room.onMessage('fx', () => {
+        confettiAt(P.pos.clone().add(new V3(0, 4, 0)));
+        sparkleColumn(P.pos, 0xffd028);
+        sfx('buy');
+    });
     room.onMessage('ball', spawnBall);
     room.onMessage('boards', renderBoards);
     room.onLeave((code) => {
@@ -407,20 +431,46 @@ function rayHit(o, d, maxT) {
     }
     return best;
 }
-const camDir = new V3(), camGoal = new V3();
+const camDir = new V3(), camGoal = new V3(), camPos = new V3(), lookTmp = new V3();
+const ATTRACT_LOOK = new V3(0, 8, 10);
+let intro = null, baseFov = camera.fov;
+const ease = (k) => (k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2);
 function updateCamera(dt) {
     if (!running) {
         const t = performance.now() / 1000;
         camera.position.set(Math.sin(t * 0.08) * 55, 22, Math.cos(t * 0.08) * 45 - 5);
-        camera.lookAt(0, 8, 10);
+        camera.lookAt(ATTRACT_LOOK);
+        baseFov = camera.fov;
         return;
     }
     cam.target.lerp(camGoal.set(P.pos.x, P.pos.y + 4.5, P.pos.z), 1 - Math.exp(-dt * 18));
     const cp = Math.cos(cam.pitch);
     camDir.set(Math.sin(cam.yaw) * cp, Math.sin(cam.pitch), Math.cos(cam.yaw) * cp);
     const dist = Math.max(3, rayHit(cam.target, camDir, cam.dist) - 0.8);
-    camera.position.copy(cam.target).addScaledVector(camDir, dist);
-    camera.lookAt(cam.target);
+    camPos.copy(cam.target).addScaledVector(camDir, dist);
+    if (intro) {
+        // Fly from the menu orbit down to the player
+        intro.t += dt;
+        const k = ease(Math.min(1, intro.t / intro.dur));
+        camera.position.lerpVectors(intro.from, camPos, k);
+        camera.lookAt(lookTmp.lerpVectors(ATTRACT_LOOK, cam.target, k));
+        if (intro.t >= intro.dur) intro = null;
+    } else {
+        camera.position.copy(camPos);
+        camera.lookAt(cam.target);
+    }
+    if (shake > 0.001) {
+        const s = shake * shake * 0.9;
+        camera.position.x += (Math.random() * 2 - 1) * s;
+        camera.position.y += (Math.random() * 2 - 1) * s;
+        shake = Math.max(0, shake - dt * 2.2);
+    }
+    // Field of view widens with speed and sprint
+    const fovBase = innerWidth < innerHeight ? 85 : 70;
+    const speedKick = P.moving ? Math.min(8, Math.max(0, walkSpeed() - 30) * 0.08) : 0;
+    const want = fovBase + speedKick + (P.sprinting && !reduceMotion ? 9 : 0);
+    baseFov += (want - baseFov) * Math.min(1, dt * 5);
+    if (Math.abs(camera.fov - baseFov) > 0.01) { camera.fov = baseFov; camera.updateProjectionMatrix(); }
     sun.position.set(P.pos.x + 40, P.pos.y + 90, P.pos.z - 30);
     sun.target.position.copy(P.pos);
 }
@@ -476,7 +526,10 @@ function update(dt) {
 
     if (!P.dead) {
         const ws = walkSpeed();
-        if ((keys.Space || touchJump) && P.onGround) { P.vel.y = JUMP_V; P.onGround = false; }
+        if ((keys.Space || touchJump) && P.onGround) {
+            P.vel.y = JUMP_V; P.onGround = false;
+            sfx('jump'); P.squashV += 5; dust(P.pos, 4, 0.6);
+        }
         P.vel.y -= GRAV * dt;
         P.push.multiplyScalar(Math.exp(-(P.onGround ? 4 : 1.2) * dt));
         let vx = mv.x * ws + P.push.x, vz = mv.z * ws + P.push.z;
@@ -497,6 +550,15 @@ function update(dt) {
             moveAxis('y', -0.3);
             if (!P.onGround) P.pos.y = y0;
         }
+        if (P.onGround) {
+            if (P.airTime > 0.3) {
+                sfx('land');
+                dust(P.pos, P.airTime > 0.7 ? 12 : 7, P.airTime > 0.7 ? 1.4 : 1);
+                P.squashV -= Math.min(9, 3 + P.airTime * 6);
+                if (P.airTime > 0.9) { ring(P.pos, 0xffffff, 5, 0.45); addShake(0.35); }
+            }
+            P.airTime = 0;
+        } else P.airTime += dt;
         if (P.moving) P.facing = lerpAngle(P.facing, Math.atan2(mv.x, mv.z), 1 - Math.exp(-dt * 14));
 
         if (P.shield > 0) P.shield -= dt;
@@ -540,6 +602,7 @@ function update(dt) {
     updateChase(dt);
     updateBalls();
     updateEffects(dt);
+    updateFx(dt);
     for (const fn of tickers) fn(dt, t);
     beltTex.offset.x = (beltTex.offset.x + dt * 0.75) % 1;
     for (const p of pickups) {
@@ -555,6 +618,18 @@ function update(dt) {
     const hs = P.moving ? walkSpeed() : 0;
     P.animPhase += dt * (P.onGround ? Math.min(18, 4 + hs * 0.2) : 0);
     if (P.onGround) animRig(rig, P.animPhase, P.moving ? 0.9 : 0); else airPose(rig);
+    const stepN = Math.floor(P.animPhase / Math.PI);
+    if (P.onGround && P.moving && !P.dead && stepN !== P.lastStep) {
+        sfx('step');
+        if ((P.sprinting || hs > 45) && stepN % 2 === 0) dust(P.pos, 1, 0.5);
+    }
+    P.lastStep = stepN;
+    // Squash & stretch spring around 1
+    P.squashV += (1 - P.squash) * 180 * dt;
+    P.squashV *= Math.exp(-12 * dt);
+    P.squash = clamp(P.squash + P.squashV * dt, 0.7, 1.3);
+    rig.scale.set(1 / Math.sqrt(P.squash), P.squash, 1 / Math.sqrt(P.squash));
+    setSpeedLines(!P.dead && P.moving && (P.sprinting || hs > 60) && !reduceMotion ? (P.sprinting ? 1 : 0.5) : 0, dt);
     rig.visible = !P.dead && (P.shield <= 0 || Math.floor(t * 12) % 2 === 0);
     updateAuraFx(auraFx, auraById[S.aura], t);
     const label = fmt(S.speed) + ' Speed';
@@ -565,6 +640,7 @@ function update(dt) {
 
     sendMove(false);
     updatePrompt();
+    animateCounters(dt);
     hudT -= dt;
     if (hudT <= 0) { hudT = 0.1; updateHud(P, online); refreshShop(); }
 }
@@ -579,7 +655,7 @@ function frame(now) {
     if (running) update(dt);
     else { beltTex.offset.x = (beltTex.offset.x + dt * 0.75) % 1; updateSlabs(now / 1000); }
     updateCamera(dt);
-    renderer.render(scene, camera);
+    render();
     requestAnimationFrame(frame);
 }
 
@@ -589,6 +665,7 @@ async function play() {
     storageSet('sfs_name', name);
     const btn = $('#playBtn'), err = $('#connectErr');
     btn.disabled = true; btn.textContent = 'JOINING…'; err.hidden = true;
+    initAudio();
     try {
         const room = await connect(name);
         const me = room.state.players && room.state.players.get(room.sessionId);
@@ -600,7 +677,10 @@ async function play() {
         btn.disabled = false; btn.textContent = 'PLAY';
         return;
     }
+    intro = { t: 0, dur: 2.2, from: camera.position.clone() };
     running = true;
+    startMusic();
+    sfx('whistle');
     $('#start').hidden = true;
     $('#hud').hidden = false;
     $('#touch').hidden = !isTouch;
