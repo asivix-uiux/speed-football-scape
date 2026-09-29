@@ -41,7 +41,7 @@ scene.add(sun, sun.target);
 
 // ----- materials & textures -----
 export const UNIT = new T.BoxGeometry(1, 1, 1);
-export const NEON_BOOST = 2.2;
+export const NEON_BOOST = 1.3;
 const matCache = new Map();
 export function mat(color, o) {
     o = o || {};

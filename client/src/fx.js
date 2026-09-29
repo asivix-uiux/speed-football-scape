@@ -18,13 +18,13 @@ if (!QUALITIES[quality]) quality = 'high';
 // Neon materials are HDR (brighter than 1) so only they cross the bloom threshold;
 // neutral tone mapping keeps every other colour close to its authored sRGB value.
 renderer.toneMapping = T.NeutralToneMapping;
-renderer.toneMappingExposure = 1.5;
+renderer.toneMappingExposure = 1.2;
 
 let composer = null, bloomPass = null;
 function buildComposer() {
     composer = new EffectComposer(renderer);
     composer.addPass(new RenderPass(scene, camera));
-    bloomPass = new UnrealBloomPass(new T.Vector2(innerWidth / 2, innerHeight / 2), 0.6, 0.4, 1.1);
+    bloomPass = new UnrealBloomPass(new T.Vector2(innerWidth / 2, innerHeight / 2), 0.3, 0.3, 1.2);
     composer.addPass(bloomPass);
     composer.addPass(new OutputPass());
 }
@@ -120,6 +120,21 @@ export function sparkleColumn(pos, color) {
     }
 }
 
+// Treadmill effects: x3 flames, x9 electric sparks, x25 white/purple twinkles
+export function emitTread(at, mult, len, width) {
+    const p = new V3(at.x + (Math.random() - 0.5) * len * 0.8, at.y, at.z + (Math.random() - 0.5) * width * 0.9);
+    if (mult === 3) {
+        spawn(p, new V3((Math.random() - 0.5) * 1.5, 5 + Math.random() * 4, (Math.random() - 0.5) * 1.5), Math.random() < 0.5 ? 0xff7a1a : 0xffc414,
+            0.9 + Math.random() * 0.7, 0.45 + Math.random() * 0.3, { add: true, hdr: 1.3, grow: -0.6, opacity: 0.9 });
+    } else if (mult === 9) {
+        spawn(p.setY(at.y + Math.random() * 2.5), new V3((Math.random() - 0.5) * 8, (Math.random() - 0.3) * 6, (Math.random() - 0.5) * 8), 0x7fe8ff,
+            0.35 + Math.random() * 0.3, 0.18 + Math.random() * 0.15, { add: true, hdr: 1.6 });
+    } else {
+        spawn(p.setY(at.y + Math.random() * 4), new V3(0, 1 + Math.random() * 2, 0), Math.random() < 0.6 ? 0xffffff : 0xc28cff,
+            0.3 + Math.random() * 0.35, 0.6 + Math.random() * 0.5, { add: true, hdr: 1.5 });
+    }
+}
+
 // Expanding neon ring on the ground (level up, landing big falls)
 const rings = [];
 export function ring(pos, color, maxR, life) {
@@ -162,7 +177,7 @@ export function updateFx(dt) {
         p.s.position.addScaledVector(p.v, dt);
         const k = p.life / p.max;
         p.s.material.opacity = p.fade0 * Math.min(1, k * 2);
-        if (p.grow) p.s.scale.setScalar(p.size * (1 + p.grow * (1 - k)));
+        if (p.grow) p.s.scale.setScalar(Math.max(0.05, p.size * (1 + p.grow * (1 - k))));
     }
     for (let i = rings.length - 1; i >= 0; i--) {
         const r = rings[i];

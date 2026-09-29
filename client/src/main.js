@@ -6,6 +6,7 @@ import {
 } from './engine.js';
 import { S, actions, net } from './state.js';
 import { initAudio, startMusic, sfx } from './audio.js';
+import { updateMaterials } from './textures.js';
 import { pad, pollGamepad, rumble, onGamepadConnection } from './gamepad.js';
 import { render, setSpeedLines, updateFx, dust, sparkleColumn, ring, fireworks } from './fx.js';
 import { buildWorld, SPAWN, pickups, beltTex, refreshShop, renderBoards, treadLocked, updateSlabs } from './world.js';
@@ -361,7 +362,7 @@ async function connect(name) {
 // =====================================================================================
 // Camera & input
 // =====================================================================================
-const cam = { yaw: Math.PI, pitch: 0.35, dist: 20, target: new V3() };
+const cam = { yaw: Math.PI, pitch: 0.42, dist: 24, target: new V3() };
 const keys = {};
 const touchMove = { x: 0, y: 0 };
 let touchSprint = false, touchJump = false, running = false;
@@ -667,6 +668,7 @@ function update(dt) {
     updateBalls();
     updateEffects(dt);
     updateFx(dt);
+    updateMaterials(dt);
     for (const fn of tickers) fn(dt, t);
     beltTex.offset.x = (beltTex.offset.x + dt * 0.75) % 1;
     for (const p of pickups) {

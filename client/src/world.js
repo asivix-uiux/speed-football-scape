@@ -3,6 +3,8 @@ import {
     texFrom, billboard, textPlane, signBoard, buildRig, animRig, armsUp, football, hexCss,
 } from './engine.js';
 import { S, actions } from './state.js';
+import { lavaMaterial, brickMaterial, bannerMaterial } from './textures.js';
+import { emitTread } from './fx.js';
 import {
     CFG, LOBBY, STAGES, TREADMILLS, TREAD_GEO, PORTALS, PRODUCTS, PASSES, SOCCER, fmt, sci, clamp, rngFrom,
 } from '../../shared/config.js';
@@ -175,6 +177,11 @@ function buildTreadmill(def, cx, top, cz) {
     textPlane([{ t: 'x' + def.mult, c: neon ? hexCss(accent) : '#ffffff', px: 90 }], 4, 256, new V3(cx + L / 2 - 0.55, top + 5.8, cz), new V3(cx - 10, top + 5.8, cz));
     const sp = billboard(treadLines(def), 10, 512, new V3(cx - 2, top + 11, cz));
     treadItems.push({ def, sp, sig: '' });
+    if (def.mult > 1) {
+        const at = new V3(cx, top + 0.7, cz);
+        let acc = Math.random();
+        tickers.push((dt) => { acc += dt * 14; while (acc > 1) { acc -= 1; emitTread(at, def.mult, L, W); } });
+    }
 }
 
 function buildLobby() {
@@ -312,12 +319,21 @@ function spike(x, y, z) {
     m.position.set(x, y + 2, z); m.castShadow = true; scene.add(m);
     const k = aabb(x, y + 1.5, z, 2, 3, 2); k.active = true; kills.push(k);
 }
+function texturedBox(sx, sy, sz, x, y, z, material) {
+    const m = new T.Mesh(UNIT, material);
+    m.scale.set(sx, sy, sz); m.position.set(x, y, z);
+    m.matrixAutoUpdate = false; m.updateMatrix();
+    scene.add(m);
+    return m;
+}
 function lavaPillar(x, z, h) {
-    box(3.5, h + 10, 3.5, x, -10 + (h + 10) / 2 - 6, z, CC.pillar, { kill: true, neon: true });
+    const sy = h + 10;
+    texturedBox(3.5, sy, 3.5, x, -10 + sy / 2 - 6, z, lavaMaterial(1, sy / 6));
+    const k = aabb(x, -10 + sy / 2 - 6, z, 3.5, sy, 3.5); k.active = true; kills.push(k);
 }
 function lavaPit(z0, z1) {
     const len = z1 - z0;
-    box(CFG.courseWidth, 1, len, 0, -6.5, z0 + len / 2, CC.lava, { neon: true, decor: true });
+    texturedBox(CFG.courseWidth, 1, len, 0, -6.5, z0 + len / 2, lavaMaterial(CFG.courseWidth / 14, len / 14));
     const k = aabb(0, -22, z0 + len / 2, CFG.courseWidth, 34, len); k.active = true; kills.push(k);
 }
 function addPickup(stageIdx, x, y, z, amount) {
@@ -451,10 +467,17 @@ function buildCourse() {
         const rng = rngFrom(100 + idx * 17);
         const mid = s.zS + s.len / 2;
         for (const sx of [-1, 1]) {
-            box(2, 86, s.len, sx * (W / 2 + 1), 3, mid, CC.wall);
-            box(0.6, 3, s.len, sx * (W / 2 + 0.1), 12, mid, CC.wallDark, { decor: true });
-            box(0.6, 3, s.len, sx * (W / 2 + 0.1), 30, mid, CC.wallDark, { decor: true });
-            for (let z = s.zS + 10; z < s.zE; z += 40) box(0.4, 2, 6, sx * (W / 2 - 0.1), 18, z, 0xffe7a8, { neon: true, decor: true });
+            texturedBox(2, 86, s.len, sx * (W / 2 + 1), 3, mid, brickMaterial(CC.wall, s.len / 12, 86 / 6));
+            solids.push(aabb(sx * (W / 2 + 1), 3, mid, 2, 86, s.len));
+            for (let z = s.zS + 20; z < s.zE - 5; z += 40) {
+                box(2.4, WALLH, 2.4, sx * (W / 2 + 0.3), WALLH / 2, z, CC.pillar, { decor: true });
+                box(3, 1.2, 3, sx * (W / 2 + 0.3), WALLH - 0.6, z, 0xc2560a, { decor: true });
+                box(0.4, 2, 5, sx * (W / 2 - 0.1), 20, z + 20, 0xffe7a8, { neon: true, decor: true });
+                const banner = new T.Mesh(new T.PlaneGeometry(5, 12.5), bannerMaterial((z / 40) % 2 ? ['#d71e2d', '#8c0f1a'] : ['#1e46c8', '#0f2470'], (z / 40) % 2 ? 'GOAL' : 'RUN!'));
+                banner.position.set(sx * (W / 2 - 0.05), 30, z + 10);
+                banner.rotation.y = -sx * Math.PI / 2;
+                scene.add(banner);
+            }
         }
         box(W + 4, 2, s.len, 0, WALLH + 1, mid, CC.ceiling, { decor: true });
         box(W, 2, 16, 0, -1, s.zS + 8, CC.floor, { studs: true });
@@ -475,7 +498,8 @@ function buildCourse() {
         tr.enter = () => actions.enterStage(idx);
         triggers.push(tr);
         if (finish) {
-            box(W + 4, 90, 2, 0, 2, s.zE + 1, CC.wall);
+            texturedBox(W + 4, 90, 2, 0, 2, s.zE + 1, brickMaterial(CC.wall, 4, 15));
+            solids.push(aabb(0, 2, s.zE + 1, W + 4, 90, 2));
             textPlane([{ t: 'YOU ESCAPED!', c: '#ffd028', s: '#16121f', px: 150 }, { t: 'More stages coming soon', c: '#ffffff', s: '#16121f', px: 70 }], 34, 1024, new V3(0, 24, s.zE - 0.2), new V3(0, 24, s.zE - 20));
         }
     });
