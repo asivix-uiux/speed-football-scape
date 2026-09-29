@@ -29,17 +29,18 @@ export function defaultProfile(uid, name) {
     };
 }
 
-export function getProfile(uid, name) {
+// A blank name keeps the saved one; new players without a name get a random one
+export function getProfile(uid, name, fallbackName) {
     let p = profiles.get(uid);
     if (!p) {
-        p = defaultProfile(uid, name);
+        p = defaultProfile(uid, name || fallbackName);
         profiles.set(uid, p);
     } else {
         // Reconcile profiles saved by older versions
         p = Object.assign(defaultProfile(uid, name), p);
         profiles.set(uid, p);
     }
-    p.name = name;
+    if (name) p.name = name;
     dirty = true;
     return p;
 }

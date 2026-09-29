@@ -543,11 +543,11 @@ function stageGate(s, idx) {
     const m = new T.ShaderMaterial({
         uniforms: {
             uTime: { value: 0 }, uRip: { value: 9 }, uRipC: { value: new T.Vector2(0.5, 0.2) },
-            uColor: { value: new T.Color(s.subColor) }, uAspect: { value: fw / GATE_H },
+            uColor: { value: new T.Color(s.subColor) }, uAspect: { value: fw / GATE_H }, uFade: { value: 1 },
         },
         vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
         fragmentShader: `
-            uniform float uTime, uRip, uAspect; uniform vec2 uRipC; uniform vec3 uColor; varying vec2 vUv;
+            uniform float uTime, uRip, uAspect, uFade; uniform vec2 uRipC; uniform vec3 uColor; varying vec2 vUv;
             float hexDist(vec2 p) { p = abs(p); return max(dot(p, normalize(vec2(1.0, 1.7320508))), p.x); }
             void main() {
                 vec2 uv = vec2(vUv.x * uAspect, vUv.y) * 8.0;
@@ -562,7 +562,7 @@ function stageGate(s, idx) {
                 float ring = exp(-pow(length(d) - uRip * 1.8, 2.0) * 40.0) * clamp(1.0 - uRip / 1.1, 0.0, 1.0);
                 float flash = clamp(1.0 - uRip * 2.5, 0.0, 1.0) * 0.45;
                 float fade = smoothstep(0.0, 0.05, vUv.x) * smoothstep(1.0, 0.95, vUv.x) * (0.55 + 0.45 * (1.0 - vUv.y));
-                float alpha = (0.05 + edge * 0.32 + shimmer * 0.2 + scan * 0.22 + ring * 0.9 + flash) * fade;
+                float alpha = (0.05 + edge * 0.32 + shimmer * 0.2 + scan * 0.22 + ring * 0.9 + flash) * fade * uFade;
                 vec3 col = uColor * (0.55 + edge * 0.7 + shimmer * 0.5 + ring * 1.2) + vec3(ring * 0.5 + flash);
                 gl_FragColor = vec4(col * alpha, alpha);
                 #include <colorspace_fragment>
@@ -572,7 +572,7 @@ function stageGate(s, idx) {
     const field = new T.Mesh(new T.PlaneGeometry(fw, GATE_H), m);
     field.position.set(0, GATE_H / 2, z);
     scene.add(field);
-    gates[idx] = { m, fw };
+    gates[idx] = { m, fw, z };
 }
 // Ripple from where the player broke through the field
 export function gatePulse(idx, x, y) {
@@ -586,6 +586,10 @@ export function updateGates(t, dt) {
         if (!g) continue;
         g.m.uniforms.uTime.value = t;
         g.m.uniforms.uRip.value += dt;
+        // Seen from close behind (just after running through) the field would cover the whole screen
+        const d = Math.abs(camera.position.z - g.z);
+        const behind = camera.position.z > g.z;
+        g.m.uniforms.uFade.value = behind ? Math.min(1, Math.max(0.12, (d - 4) / 30)) : Math.min(1, Math.max(0.35, (d - 2) / 12));
     }
 }
 

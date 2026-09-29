@@ -775,3 +775,12 @@ async function boot() {
     requestAnimationFrame(frame);
 }
 boot();
+
+// Dev-only hooks for automated QA runs (stripped from production builds)
+if (import.meta.env.DEV) {
+    window.__qa = {
+        P, S, STAGES,
+        teleport: (x, y, z) => teleport(new V3(x, y, z), 0),
+        state: () => ({ x: P.pos.x, y: P.pos.y, z: P.pos.z, dead: P.dead, stage: P.stage, wins: S.wins, level: S.level, speed: S.speed, aura: S.aura, equipped: S.equipped, rebirths: S.rebirths }),
+    };
+}

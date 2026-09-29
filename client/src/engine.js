@@ -418,17 +418,17 @@ export function football(d, parent) {
 
 // ----- particles & floating text -----
 const particles = [];
-export function burst(pos, color) {
-    for (let i = 0; i < 26; i++) {
+export function burst(pos, color, size, count) {
+    for (let i = 0; i < (count || 26); i++) {
         const m = new T.Mesh(UNIT, mat(i % 3 ? color : 0xffffff));
-        m.scale.setScalar(0.5 + Math.random() * 0.5);
+        m.scale.setScalar((size || 1) * (0.5 + Math.random() * 0.5));
         m.position.copy(pos);
         scene.add(m);
         particles.push({ m, v: new V3((Math.random() * 2 - 1) * 25, Math.random() * 30 + 5, (Math.random() * 2 - 1) * 25), t: 1.2 });
     }
 }
 export function confettiAt(pos) {
-    for (const c of [0xffd028, 0x46ec50, 0x28c8ff, 0xe82434, 0xc428ff]) burst(pos, c);
+    for (const c of [0xffd028, 0x46ec50, 0x28c8ff, 0xe82434, 0xc428ff]) burst(pos, c, 0.4, 12);
 }
 const floaters = [];
 export function floatText(text, color, pos) {

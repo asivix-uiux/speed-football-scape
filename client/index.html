@@ -118,6 +118,18 @@ button:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
 #sprintBtn { right: calc(max(1.5rem, env(safe-area-inset-right, 0px)) + 6.8rem); bottom: calc(env(safe-area-inset-bottom, 0px) + 1.2rem); width: 4.6rem; height: 4.6rem; }
 #sprintBtn.on { filter: brightness(1.3); outline: 3px solid var(--white); }
 body.touch #bottom { bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem); width: min(20rem, 46vw); }
+@media (max-width: 600px) {
+    body.touch #bottom { bottom: calc(env(safe-area-inset-bottom, 0px) + 11.5rem); width: min(22rem, 78vw); }
+    #rightCol { width: 7.4rem; top: 42%; }
+    #customSpeed label { font-size: 0.85rem; }
+    .pbtn { font-size: 0.9rem; padding: 0.35rem 0.5rem; justify-content: center; }
+    .pbtn .price { display: none; }
+    #offer { gap: 0.4rem; padding: 0.3rem 0.4rem 0.3rem 0.5rem; max-width: 64vw; }
+    #offer .ic { font-size: 1.6rem; }
+    #offer .tt { font-size: 0.95rem; white-space: nowrap; }
+    #offer .yes, #offer .no { font-size: 0.8rem; padding: 0.25rem 0.45rem; }
+    #leftCol { top: 58%; }
+}
 body.touch #sprintHint { display: none; }
 
 /* Panels ----------------------------------------------------------------- */

@@ -8,10 +8,11 @@ import {
 
 const GREEN = '#7dff6b', RED = '#ff5a5a', GOLD = '#ffd028', BLUE = '#6fe0ff';
 
+// Empty string when the player left the name box blank
 function cleanName(name) {
-    const s = String(name || '').replace(/[^\w .\-]/g, '').trim().slice(0, 20);
-    return s || 'Player' + Math.floor(1000 + Math.random() * 9000);
+    return String(name || '').replace(/[^\w .\-]/g, '').trim().slice(0, 20);
 }
+const randomName = () => 'Player' + Math.floor(1000 + Math.random() * 9000);
 const finite = (v) => typeof v === 'number' && Number.isFinite(v);
 
 // One shared world: lobby + the 6-stage course. Movement is client-side,
@@ -43,7 +44,7 @@ export class SpeedRoom extends Room {
 
     onJoin(client, options) {
         const uid = String((options && options.uid) || client.sessionId).slice(0, 64);
-        const profile = getProfile(uid, cleanName(options && options.name));
+        const profile = getProfile(uid, cleanName(options && options.name), randomName());
         const player = new PlayerState();
         player.name = profile.name;
         player.x = 0; player.y = 0.5; player.z = -14; player.ry = 0;
