@@ -1,0 +1,221 @@
+import { $ } from './engine.js';
+import { S, actions, net } from './state.js';
+import {
+    CFG, PRODUCTS, PASSES, OFFERS, AURAS, FREE, xpFor, maxSpeedFor, fmt, clock, clamp,
+} from '../../shared/config.js';
+
+const el = {
+    wins: $('#winsVal'), speed: $('#speedVal'), rebStat: $('#rebirthStat'), reb: $('#rebirthVal'), online: $('#onlineVal'),
+    xpFill: $('#xpFill'), levelTxt: $('#levelTxt'), xpTxt: $('#xpTxt'), stamFill: $('#stamFill'), stamTxt: $('#stamTxt'),
+    maxSpeed: $('#maxSpeedTxt'), input: $('#speedInput'), price2x: $('#price2x'), boost: $('#boost'), freeBadge: $('#freeBadge'),
+    offer: $('#offer'), offerIc: $('#offerIc'), offerTitle: $('#offerTitle'), offerSub: $('#offerSub'),
+    prompt: $('#promptBtn'), promptTxt: $('#promptTxt'),
+};
+export const promptEl = el.prompt, promptTxtEl = el.promptTxt;
+
+// ----- HUD -----
+export function updateHud(P, online) {
+    el.wins.textContent = fmt(S.wins);
+    el.speed.textContent = fmt(S.speed);
+    el.rebStat.hidden = S.rebirths === 0;
+    el.reb.textContent = S.rebirths;
+    el.online.textContent = online;
+    const need = xpFor(Math.min(S.level, CFG.maxLevel));
+    el.xpFill.style.width = clamp(S.xp / need * 100, 0, 100) + '%';
+    el.levelTxt.textContent = S.level >= CFG.maxLevel ? 'Level MAX' : 'Level ' + S.level + ' / ' + CFG.maxLevel;
+    el.xpTxt.textContent = fmt(S.xp) + ' / ' + fmt(need);
+    el.stamFill.style.width = (P.stamina / CFG.staminaMax * 100) + '%';
+    el.stamTxt.textContent = '👟 ' + Math.floor(P.stamina) + '/' + CFG.staminaMax;
+    const max = maxSpeedFor(S.level, S.rebirths);
+    el.maxSpeed.textContent = 'Max: ' + max;
+    if (document.activeElement !== el.input) el.input.value = S.customSpeed > 0 && S.customSpeed <= max ? S.customSpeed : max;
+    el.price2x.textContent = S.passes.DoubleSpeed ? 'OWNED' : 'R$' + PASSES.DoubleSpeed.price;
+    const boostLeft = (S.boostUntil - net.now()) / 1000;
+    el.boost.hidden = boostLeft <= 0;
+    if (boostLeft > 0) el.boost.textContent = '⚡ x' + CFG.boostMult + ' SPEED BOOST ' + clock(boostLeft);
+    const mins = (net.now() - S.joinedAt) / 60000;
+    el.freeBadge.hidden = !FREE.some((r, i) => mins >= r.min && !S.freeClaimed[i]);
+    updateOffer();
+    if (!$('#modal').hidden && modalKind === 'free') renderFree();
+}
+
+// Rotating offer at the top of the screen
+let offerIdx = 0, offerT = 0, offerDismissed = false;
+function updateOffer() {
+    const packLeft = CFG.starterPackDuration - (net.now() - S.firstPlay) / 1000;
+    const list = OFFERS.filter((o) => (o.key !== 'StarterPack' || (packLeft > 0 && !S.claimedPack)) && !(o.kind === 'pass' && S.passes[o.key]));
+    offerT += 0.1;
+    if (offerT > CFG.offerRotate) { offerT = 0; offerIdx++; offerDismissed = false; }
+    if (!list.length || offerDismissed) { el.offer.hidden = true; return; }
+    const o = list[offerIdx % list.length];
+    el.offer.hidden = false;
+    el.offerIc.textContent = o.ic;
+    el.offerTitle.textContent = o.title;
+    const price = o.kind === 'pass' ? PASSES[o.key].price : PRODUCTS[o.key].price;
+    el.offerSub.textContent = (o.key === 'StarterPack' ? '⏰ ' + clock(packLeft) + ' · ' : '') + 'ONLY R$' + price;
+    el.offer.dataset.kind = o.kind; el.offer.dataset.key = o.key;
+}
+$('#offerYes').addEventListener('click', () => buy(el.offer.dataset.kind, el.offer.dataset.key));
+$('#offerNo').addEventListener('click', () => { offerDismissed = true; el.offer.hidden = true; });
+
+export function toast(text, color) {
+    const d = document.createElement('div');
+    d.className = 'toast o'; d.textContent = text; d.style.color = color || '#fff';
+    const box = $('#toasts');
+    box.appendChild(d);
+    while (box.children.length > 3) box.firstChild.remove();
+    setTimeout(() => d.remove(), 2400);
+}
+export function levelUp(a, b) {
+    const d = $('#levelBanner');
+    d.textContent = '⬆ Level ' + a + ' > ' + b;
+    d.classList.remove('show'); void d.offsetWidth; d.classList.add('show');
+}
+let titleTimer;
+export function showStageTitle(s) {
+    $('#stageName').textContent = s.name;
+    const sub = $('#stageSub'); sub.textContent = s.sub; sub.style.color = s.subColor;
+    const t = $('#stageTitle'); t.style.opacity = 1;
+    clearTimeout(titleTimer);
+    titleTimer = setTimeout(() => { t.style.opacity = 0; }, 2600);
+}
+
+el.input.addEventListener('change', () => net.send('custom', { v: Number(el.input.value) || 0 }));
+
+// ----- purchases (free in the web demo; the server grants them) -----
+let pendingBuy = null;
+export function buy(kind, key) {
+    if (kind === 'pass' && S.passes[key]) { toast(PASSES[key].name + ' already owned!', '#6fe0ff'); return; }
+    const item = kind === 'pass' ? PASSES[key] : PRODUCTS[key];
+    if (!item) return;
+    pendingBuy = { kind, key };
+    $('#buyItem').textContent = item.name;
+    $('#buyCost').textContent = 'R$ ' + item.price;
+    $('#buy').hidden = false;
+}
+$('#buyOk').addEventListener('click', () => {
+    $('#buy').hidden = true;
+    if (pendingBuy) net.send('buy', pendingBuy);
+    pendingBuy = null;
+});
+$('#buyCancel').addEventListener('click', () => {
+    $('#buy').hidden = true;
+    if (pendingBuy && pendingBuy.key === 'Revive') actions.revive(false);
+    pendingBuy = null;
+});
+$('#btn2x').addEventListener('click', () => buy('pass', 'DoubleSpeed'));
+document.querySelectorAll('[data-product]').forEach((b) => b.addEventListener('click', () => buy('product', b.dataset.product)));
+
+// ----- revive popup -----
+let reviveTimer;
+export function showRevive() {
+    $('#revive').hidden = false;
+    let left = CFG.reviveTimeout;
+    $('#reviveTimer').textContent = 'Returning to lobby in ' + left + 's';
+    clearInterval(reviveTimer);
+    reviveTimer = setInterval(() => {
+        left--;
+        $('#reviveTimer').textContent = 'Returning to lobby in ' + Math.max(0, left) + 's';
+        if (left <= 0) { $('#buy').hidden = true; pendingBuy = null; actions.revive(false); }
+    }, 1000);
+}
+export function hideRevive() {
+    clearInterval(reviveTimer);
+    $('#revive').hidden = true;
+}
+$('#reviveYes').addEventListener('click', () => { hideRevive(); buy('product', 'Revive'); });
+$('#reviveNo').addEventListener('click', () => actions.revive(false));
+
+// ----- panels -----
+let modalKind = null;
+export function openModal(kind) { modalKind = kind; renderModal(); $('#modal').hidden = false; }
+export function closeModal() { $('#modal').hidden = true; modalKind = null; }
+export function refreshModal() { if (!$('#modal').hidden) renderModal(); }
+$('#modalClose').addEventListener('click', closeModal);
+$('#modal').addEventListener('pointerdown', (e) => { if (e.target.id === 'modal') closeModal(); });
+$('#btnRebirth').addEventListener('click', () => openModal('rebirth'));
+$('#btnAuras').addEventListener('click', () => openModal('auras'));
+$('#btnFree').addEventListener('click', () => openModal('free'));
+$('#btnStore').addEventListener('click', () => openModal('store'));
+
+function rowCard(ic, name, desc, btnText, btnClass, onClick, disabled) {
+    const d = document.createElement('div');
+    d.className = 'row-card';
+    d.innerHTML = '<div class="ic"></div><div><div class="nm o1"></div><div class="ds"></div></div><button class="btn o1"></button>';
+    d.querySelector('.ic').textContent = ic;
+    d.querySelector('.nm').textContent = name;
+    d.querySelector('.ds').textContent = desc;
+    const b = d.querySelector('button');
+    b.classList.add(btnClass);
+    b.textContent = btnText; b.disabled = !!disabled;
+    b.addEventListener('click', onClick);
+    return d;
+}
+function sec(text) { const d = document.createElement('div'); d.className = 'sec'; d.textContent = text; return d; }
+
+function renderModal() {
+    const body = $('#modalBody');
+    const title = $('#modalTitle');
+    body.innerHTML = '';
+    if (modalKind === 'rebirth') {
+        title.textContent = 'Rebirth';
+        const cur = 1 + S.rebirths * CFG.rebirthStep, next = cur + CFG.rebirthStep;
+        const ready = S.level >= CFG.maxLevel;
+        const w = document.createElement('div');
+        w.className = 'rebirth-box';
+        w.innerHTML = `<div class="big o">🔄 ${S.rebirths} Rebirths</div>
+            <div class="mult o"><span style="color:#6fe0ff">x${cur}</span><span>➜</span><span style="color:#7dff6b">x${next}</span></div>
+            <p>Each rebirth adds +50% to all Speed you earn and +20 max walk speed. Your level resets to 1. You keep Speed, Wins and players.</p>
+            <p style="color:${ready ? '#7dff6b' : '#ffb51c'};font-weight:700">${ready ? 'Ready to rebirth!' : 'Reach Level ' + CFG.maxLevel + ' to rebirth (now Level ' + S.level + ')'}</p>`;
+        const b = document.createElement('button');
+        b.className = 'btn o ' + (ready ? 'g-green' : 'g-grey');
+        b.textContent = 'REBIRTH';
+        b.disabled = !ready;
+        b.addEventListener('click', () => net.send('rebirth'));
+        w.appendChild(b);
+        body.appendChild(w);
+    } else if (modalKind === 'auras') {
+        title.textContent = 'Auras';
+        for (const a of AURAS) {
+            const owned = S.auras[a.id] || (a.pass ? S.passes[a.pass] : S.wins >= a.req);
+            const on = S.aura === a.id;
+            const desc = 'x' + a.mult + ' Speed · ' + (a.pass ? 'R$' + PASSES[a.pass].price : '🏆 ' + fmt(a.req) + ' Wins');
+            let btn, cls, fn;
+            if (on) { btn = 'Unequip'; cls = 'g-grey'; fn = () => net.send('aura', { id: '' }); }
+            else if (owned) { btn = 'Equip'; cls = 'g-green'; fn = () => net.send('aura', { id: a.id }); }
+            else if (a.pass) { btn = 'R$' + PASSES[a.pass].price; cls = 'g-pink'; fn = () => buy('pass', a.pass); }
+            else { btn = '🔒 Locked'; cls = 'g-grey'; fn = () => toast('Need ' + fmt(a.req - S.wins) + ' more Wins!', '#ff5a5a'); }
+            body.appendChild(rowCard(a.ic, a.name, desc, btn, cls, fn));
+        }
+    } else if (modalKind === 'free') {
+        title.textContent = 'FREE Rewards';
+        renderFree();
+    } else if (modalKind === 'store') {
+        title.textContent = 'Store';
+        body.appendChild(sec('Speed'));
+        for (const k of ['Speed10K', 'Speed100K', 'Speed1M']) {
+            const p = PRODUCTS[k];
+            body.appendChild(rowCard('👟', p.name, 'Instant Speed', 'R$' + p.price, 'g-yellow', () => buy('product', k)));
+        }
+        body.appendChild(rowCard('⏱️', 'x2 Speed Boost', '15 minutes of double Speed', 'R$' + PRODUCTS.SpeedBoost.price, 'g-yellow', () => buy('product', 'SpeedBoost')));
+        body.appendChild(sec('Game passes'));
+        for (const k of Object.keys(PASSES)) {
+            const p = PASSES[k], owned = !!S.passes[k];
+            body.appendChild(rowCard(p.ic, p.name, p.desc, owned ? 'OWNED' : 'R$' + p.price, owned ? 'g-grey' : 'g-green', () => buy('pass', k), owned));
+        }
+    }
+}
+function renderFree() {
+    const body = $('#modalBody');
+    body.innerHTML = '';
+    const mins = (net.now() - S.joinedAt) / 60000;
+    FREE.forEach((r, i) => {
+        const claimed = !!S.freeClaimed[i];
+        const ready = mins >= r.min;
+        const name = r.speed ? '+' + fmt(r.speed) + ' Speed' : '+' + r.wins + ' Wins';
+        const btn = claimed ? 'Claimed' : ready ? 'CLAIM' : clock(r.min * 60 - mins * 60);
+        body.appendChild(rowCard(r.speed ? '👟' : '🏆', name, 'Play for ' + r.min + ' min', btn,
+            claimed ? 'g-grey' : ready ? 'g-green' : 'g-blue', () => { if (!claimed && ready) net.send('free', { i }); }, claimed || !ready));
+    });
+}
+

@@ -1,0 +1,31 @@
+# Roblox / Rojo
+*.rbxl
+*.rbxlx
+*.rbxm
+*.rbxmx
+*.rbxl.lock
+*.rbxlx.lock
+*.rbxm.lock
+*.rbxmx.lock
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Web game
+node_modules/
+client/dist/
+server/data/
+server/run.log
+.env
+
+# Local tooling and large reference media
+Lib/
+Scripts/
+Include/
+pyvenv.cfg
+reference/*.mp4

@@ -1,0 +1,64 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// Player progress keyed by a per-browser id. A JSON file is enough for the demo;
+// swap this module for the platform's database/auth when it goes live on Bloxity.
+const DATA_DIR = process.env.DATA_DIR || path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'data');
+const FILE = path.join(DATA_DIR, 'profiles.json');
+
+const profiles = new Map();
+let dirty = false;
+
+try {
+    const raw = JSON.parse(fs.readFileSync(FILE, 'utf8'));
+    for (const [uid, p] of Object.entries(raw)) profiles.set(uid, p);
+    console.log(`Loaded ${profiles.size} profiles`);
+} catch (e) {
+    if (e.code !== 'ENOENT') console.warn('Could not read profiles:', e.message);
+}
+
+export function defaultProfile(uid, name) {
+    return {
+        uid, name,
+        speed: 0, wins: 0, level: 1, xp: 0, rebirths: 0,
+        owned: { Yamal: true }, equipped: 'Yamal',
+        auras: {}, aura: '', passes: {},
+        boostUntil: 0, customSpeed: 0, claimedPack: false,
+        firstPlay: Date.now(),
+    };
+}
+
+export function getProfile(uid, name) {
+    let p = profiles.get(uid);
+    if (!p) {
+        p = defaultProfile(uid, name);
+        profiles.set(uid, p);
+    } else {
+        // Reconcile profiles saved by older versions
+        p = Object.assign(defaultProfile(uid, name), p);
+        profiles.set(uid, p);
+    }
+    p.name = name;
+    dirty = true;
+    return p;
+}
+
+export function markDirty() { dirty = true; }
+export function allProfiles() { return profiles.values(); }
+
+export function saveProfiles() {
+    if (!dirty) return;
+    try {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+        const tmp = FILE + '.tmp';
+        fs.writeFileSync(tmp, JSON.stringify(Object.fromEntries(profiles)));
+        fs.renameSync(tmp, FILE);
+        dirty = false;
+    } catch (e) {
+        console.warn('Could not save profiles:', e.message);
+    }
+}
+
+// Rooms also save on dispose (Colyseus disposes rooms during a graceful shutdown)
+setInterval(saveProfiles, 30000).unref();
