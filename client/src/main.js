@@ -7,7 +7,7 @@ import {
 import { S, actions, net } from './state.js';
 import { initAudio, startMusic, sfx, setVolume } from './audio.js';
 import * as BX from './bloxity.js';
-import { createAvatar, loadBase, packAvatar, unpackAvatar } from './avatar.js';
+import { createAvatar, loadBase, packAvatar, unpackAvatar, avatarStats } from './avatar.js';
 import { updateMaterials } from './textures.js';
 import { pad, pollGamepad, rumble, onGamepadConnection } from './gamepad.js';
 import { render, setSpeedLines, updateFx, dust, sparkleColumn, ring, fireworks, setQuality } from './fx.js';
@@ -925,7 +925,7 @@ boot();
 // Dev-only hooks for automated QA runs (stripped from production builds)
 if (import.meta.env.DEV) {
     window.__qa = {
-        P, S, STAGES,
+        P, S, STAGES, avatarStats, scene,
         teleport: (x, y, z) => teleport(new V3(x, y, z), 0),
         state: () => ({ x: P.pos.x, y: P.pos.y, z: P.pos.z, dead: P.dead, stage: P.stage, wins: S.wins, level: S.level, speed: S.speed, aura: S.aura, equipped: S.equipped, rebirths: S.rebirths }),
     };

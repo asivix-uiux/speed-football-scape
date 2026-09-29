@@ -123,8 +123,11 @@ const DEG = Math.PI / 180;
 const tq = new T.Quaternion(), te = new T.Euler(), tm = new T.Matrix4(), tm2 = new T.Matrix4(), tp = new V3(), tqq = new T.Quaternion(), ts = new V3();
 const ONE = new V3(1, 1, 1);
 
+export const avatarStats = { created: 0, equips: 0, props: 0 };
+
 export class BloxAvatar {
     constructor(gltf) {
+        avatarStats.created++;
         this.root = new T.Group();
         const model = cloneSkinned(gltf.scene);
         this.model = model;
@@ -200,10 +203,11 @@ export class BloxAvatar {
         });
     }
 
-    setProportions(p) { this.props = { ...(p || {}) }; }
+    setProportions(p) { avatarStats.props++; this.props = { ...(p || {}) }; }
 
     // Apply equipped cosmetics; only slots that changed are reloaded
     setEquipped(eq, skinUrl) {
+        avatarStats.equips++;
         eq = eq || {};
         const prev = this.eq;
         this.eq = { ...eq };
