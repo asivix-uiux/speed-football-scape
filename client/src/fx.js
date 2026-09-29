@@ -95,10 +95,21 @@ const softTex = (() => {
     const t = new T.CanvasTexture(c); t.colorSpace = T.SRGBColorSpace;
     return t;
 })();
+// Soap-bubble ring for the shop pedestals
+const bubbleTex = (() => {
+    const c = document.createElement('canvas'); c.width = c.height = 64;
+    const x = c.getContext('2d');
+    const g = x.createRadialGradient(32, 32, 18, 32, 32, 30);
+    g.addColorStop(0, 'rgba(255,255,255,0.05)'); g.addColorStop(0.75, 'rgba(255,255,255,0.35)'); g.addColorStop(0.92, 'rgba(255,255,255,0.95)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+    x.fillStyle = g; x.beginPath(); x.arc(32, 32, 30, 0, Math.PI * 2); x.fill();
+    x.fillStyle = 'rgba(255,255,255,0.9)'; x.beginPath(); x.arc(23, 22, 5, 0, Math.PI * 2); x.fill();
+    const t = new T.CanvasTexture(c); t.colorSpace = T.SRGBColorSpace;
+    return t;
+})();
 const sprites = [];
 function spawn(pos, vel, color, size, life, opts) {
     opts = opts || {};
-    const m = new T.SpriteMaterial({ map: softTex, color, transparent: true, depthWrite: false, blending: opts.add ? T.AdditiveBlending : T.NormalBlending, opacity: opts.opacity || 1 });
+    const m = new T.SpriteMaterial({ map: opts.map || softTex, color, transparent: true, depthWrite: false, blending: opts.add ? T.AdditiveBlending : T.NormalBlending, opacity: opts.opacity || 1 });
     if (opts.hdr) m.color.multiplyScalar(opts.hdr);
     const s = new T.Sprite(m);
     s.position.copy(pos); s.scale.setScalar(size);
@@ -118,6 +129,12 @@ export function sparkleColumn(pos, color) {
         spawn(new V3(pos.x + Math.cos(a) * r, pos.y + Math.random() * 2, pos.z + Math.sin(a) * r), new V3(0, 7 + Math.random() * 8, 0),
             color, 0.3 + Math.random() * 0.3, 0.7 + Math.random() * 0.4, { add: true, hdr: 1.6, drag: 0.6 });
     }
+}
+
+export function bubble(at, color) {
+    const a = Math.random() * Math.PI * 2, r = Math.random() * 2.6;
+    spawn(new V3(at.x + Math.cos(a) * r, at.y + Math.random() * 1.5, at.z + Math.sin(a) * r), new V3((Math.random() - 0.5) * 0.6, 1.6 + Math.random() * 1.8, (Math.random() - 0.5) * 0.6),
+        Math.random() < 0.3 ? 0xffffff : color, 0.35 + Math.random() * 0.45, 2.2 + Math.random() * 1.2, { map: Math.random() < 0.7 ? bubbleTex : softTex, add: true, hdr: 1.1, opacity: 0.85 });
 }
 
 // Treadmill effects: x3 flames, x9 electric sparks, x25 white/purple twinkles

@@ -9,7 +9,7 @@ import { initAudio, startMusic, sfx } from './audio.js';
 import { updateMaterials } from './textures.js';
 import { pad, pollGamepad, rumble, onGamepadConnection } from './gamepad.js';
 import { render, setSpeedLines, updateFx, dust, sparkleColumn, ring, fireworks } from './fx.js';
-import { buildWorld, SPAWN, pickups, beltTex, refreshShop, renderBoards, treadLocked, updateSlabs } from './world.js';
+import { buildWorld, SPAWN, pickups, beltTex, refreshShop, renderBoards, treadLocked, updateSlabs, gatePulse, updateGates } from './world.js';
 import {
     updateHud, toast, levelUp, showStageTitle, buy, showRevive, hideRevive, closeModal, openModal,
     refreshModal, promptEl, promptTxtEl, showGoal, animateCounters,
@@ -36,7 +36,7 @@ let rig, auraFx, headLabel, headLabelText = '', follower = null, followerId = nu
 function buildPlayer(kit, skin) {
     if (rig) scene.remove(rig);
     const k = KITS[kit % KITS.length];
-    rig = buildRig({ ...k, skin: SKINS[skin % SKINS.length], hair: 0x3a2618, num: 1 + (kit % 99), numC: '#ffffff' });
+    rig = buildRig({ ...k, skin: SKINS[skin % SKINS.length], hair: 0x3a2618, hairStyle: ['short', 'buzz', 'curly', 'fade', 'quiff'][skin % 5], num: 1 + (kit % 99), numC: '#ffffff', label: (S.name || '').toUpperCase() });
     scene.add(rig);
     headLabelText = '';
     headLabel = billboard([{ t: '0 Speed', c: '#ffffff', s: '#16121f', px: 60 }], 6, 512, new V3(0, 7.4, 0), rig);
@@ -191,7 +191,10 @@ actions.enterStage = (idx) => {
     P.stage = idx;
     const s = STAGES[idx];
     showStageTitle(s);
-    sfx('whoosh');
+    sfx('whoosh'); sfx('gate');
+    gatePulse(idx, P.pos.x, P.pos.y);
+    baseFov += reduceMotion ? 0 : 14;
+    const fl = $('#flash'); fl.classList.remove('show', 'gate'); void fl.offsetWidth; fl.classList.add('show', 'gate');
     if (s.type === 'Chase') setTimeout(() => sfx('whistle'), 300);
     if (s.type === 'Chase') startChase(idx); else resetChase();
     if (S.level < s.rec && S.rebirths === 0) toast('Recommended Level ' + s.rec + '!', '#ffb51c');
@@ -220,7 +223,7 @@ class Remote {
     constructor(p) {
         this.kit = p.kit; this.skin = p.skin;
         const k = KITS[p.kit % KITS.length];
-        this.rig = buildRig({ ...k, skin: SKINS[p.skin % SKINS.length], hair: 0x3a2618, num: 1 + (p.kit % 99), numC: '#ffffff' });
+        this.rig = buildRig({ ...k, skin: SKINS[p.skin % SKINS.length], hair: 0x3a2618, hairStyle: ['short', 'buzz', 'curly', 'fade', 'quiff'][p.skin % 5], num: 1 + (p.kit % 99), numC: '#ffffff', label: (p.name || '').toUpperCase() });
         this.rig.position.set(p.x, p.y, p.z);
         this.rig.rotation.y = p.ry;
         scene.add(this.rig);
@@ -669,6 +672,7 @@ function update(dt) {
     updateEffects(dt);
     updateFx(dt);
     updateMaterials(dt);
+    updateGates(t, dt);
     for (const fn of tickers) fn(dt, t);
     beltTex.offset.x = (beltTex.offset.x + dt * 0.75) % 1;
     for (const p of pickups) {

@@ -186,51 +186,160 @@ export function signBoard(center, dir, w, h, lines, boardColor) {
 }
 
 // ----- blocky football player rigs -----
-const numberTexCache = new Map();
-function numberTex(n, color) {
-    const key = n + color;
-    if (!numberTexCache.has(key)) {
-        const c = document.createElement('canvas'); c.width = c.height = 128;
+// Name + number printed on the back of a shirt
+const backTexCache = new Map();
+function backTex(label, n, color) {
+    const key = label + '|' + n + '|' + color;
+    if (!backTexCache.has(key)) {
+        const c = document.createElement('canvas'); c.width = c.height = 256;
         const x = c.getContext('2d');
-        x.font = '700 92px Fredoka, sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle';
-        x.lineWidth = 8; x.strokeStyle = 'rgba(0,0,0,0.35)'; x.strokeText(String(n), 64, 70);
-        x.fillStyle = color; x.fillText(String(n), 64, 70);
-        numberTexCache.set(key, texFrom(c));
+        x.textAlign = 'center'; x.textBaseline = 'middle';
+        x.lineJoin = 'round';
+        if (label) {
+            let px = 44;
+            x.font = `700 ${px}px Fredoka, sans-serif`;
+            while (x.measureText(label).width > 236 && px > 18) { px -= 2; x.font = `700 ${px}px Fredoka, sans-serif`; }
+            x.lineWidth = 6; x.strokeStyle = 'rgba(0,0,0,0.35)'; x.strokeText(label, 128, 48);
+            x.fillStyle = color; x.fillText(label, 128, 48);
+        }
+        x.font = '700 150px Fredoka, sans-serif';
+        x.lineWidth = 10; x.strokeStyle = 'rgba(0,0,0,0.35)'; x.strokeText(String(n), 128, 160);
+        x.fillStyle = color; x.fillText(String(n), 128, 160);
+        backTexCache.set(key, texFrom(c));
     }
-    return numberTexCache.get(key);
+    return backTexCache.get(key);
 }
+
+// Blocky hair styles built from boxes on top of the 1.2-stud head (top at y 5.2)
+function buildHair(part, style, c) {
+    switch (style) {
+        case 'buzz':
+            part(1.24, 0.1, 1.24, 0, 5.24, 0, c);
+            part(1.24, 0.55, 0.08, 0, 4.95, -0.62, c);
+            break;
+        case 'curly': {
+            part(1.26, 0.25, 1.26, 0, 5.28, 0, c);
+            for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+                const h = 0.3 + ((i * 7 + j * 13 + 20) % 5) * 0.05;
+                part(0.44, h, 0.44, i * 0.42, 5.4 + h / 2 - 0.1, j * 0.42, c);
+            }
+            part(1.26, 0.7, 0.2, 0, 4.95, -0.56, c);
+            break;
+        }
+        case 'mohawk':
+            part(1.24, 0.1, 1.24, 0, 5.24, 0, 0x3a2618);
+            part(0.42, 0.5, 1.22, 0, 5.5, 0, c);
+            part(0.42, 0.3, 0.3, 0, 5.4, 0.55, c);
+            break;
+        case 'quiff':
+            part(1.3, 0.32, 1.3, 0, 5.34, -0.02, c);
+            part(1.3, 0.7, 0.3, 0, 4.95, -0.5, c);
+            part(1.0, 0.42, 0.5, 0, 5.62, 0.34, c);
+            break;
+        case 'slick':
+            part(1.3, 0.3, 1.3, 0, 5.33, -0.02, c);
+            part(1.3, 1.1, 0.3, 0, 4.72, -0.5, c);
+            part(0.14, 0.6, 1.0, -0.64, 4.95, -0.1, c);
+            part(0.14, 0.6, 1.0, 0.64, 4.95, -0.1, c);
+            break;
+        case 'fade':
+            part(1.24, 0.1, 1.24, 0, 5.24, 0, c);
+            part(1.1, 0.3, 1.1, 0, 5.42, 0.02, c);
+            part(1.24, 0.45, 0.08, 0, 5.0, -0.62, c);
+            break;
+        case 'long':
+            part(1.3, 0.35, 1.3, 0, 5.35, -0.02, c);
+            part(1.3, 1.5, 0.3, 0, 4.55, -0.52, c);
+            part(0.16, 1.1, 0.9, -0.66, 4.7, -0.12, c);
+            part(0.16, 1.1, 0.9, 0.66, 4.7, -0.12, c);
+            part(1.3, 0.18, 0.2, 0, 5.13, 0.56, c);
+            break;
+        case 'crop':
+        case 'short':
+        default:
+            part(1.3, 0.35, 1.3, 0, 5.33, -0.02, c);
+            part(1.3, 0.75, 0.3, 0, 4.95, -0.5, c);
+            part(1.3, 0.16, 0.2, 0, 5.16, 0.56, c);
+            break;
+    }
+}
+
 export function buildRig(d) {
     const g = new T.Group();
     const part = (sx, sy, sz, x, y, z, c, parent) => {
         const m = new T.Mesh(UNIT, mat(c)); m.scale.set(sx, sy, sz); m.position.set(x, y, z); m.castShadow = true; (parent || g).add(m); return m;
     };
+    const accent = new T.Color(d.numC || '#ffffff').getHex();
+    // Torso: shirt, stripes, collar, crest, name + number on the back
     part(2, 2, 1, 0, 3, 0, d.shirt);
     if (d.stripes) { part(0.35, 2.02, 1.02, -0.5, 3, 0, d.stripes); part(0.35, 2.02, 1.02, 0.5, 3, 0, d.stripes); }
-    const num = new T.Mesh(new T.PlaneGeometry(1.5, 1.5), new T.MeshBasicMaterial({ map: numberTex(d.num || 10, d.numC || '#fff'), transparent: true, toneMapped: false }));
-    num.position.set(0, 3.05, -0.52); num.rotation.y = Math.PI; g.add(num);
-    part(1.2, 1.2, 1.2, 0, 4.6, 0, d.skin);
-    part(1.3, 0.42, 1.3, 0, 5.15, -0.03, d.hair);
-    part(1.3, 0.8, 0.35, 0, 4.85, -0.5, d.hair);
-    part(0.16, 0.24, 0.05, -0.26, 4.72, 0.61, 0x141418);
-    part(0.16, 0.24, 0.05, 0.26, 4.72, 0.61, 0x141418);
-    part(0.42, 0.08, 0.05, 0, 4.36, 0.61, 0x6b2a2a);
+    part(0.9, 0.14, 1.04, 0, 3.94, 0, accent);
+    part(0.3, 0.34, 0.04, 0.5, 3.55, 0.51, accent);
+    part(2.02, 0.12, 1.02, 0, 2.06, 0, d.shorts);
+    const back = new T.Mesh(new T.PlaneGeometry(1.8, 1.8), new T.MeshBasicMaterial({ map: backTex(d.label || '', d.num || 10, d.numC || '#fff'), transparent: true, toneMapped: false }));
+    back.position.set(0, 2.98, -0.52); back.rotation.y = Math.PI; g.add(back);
+    // Head: face, ears, hair, optional beard
+    const head = new T.Group(); g.add(head);
+    part(1.2, 1.2, 1.2, 0, 4.6, 0, d.skin, head);
+    part(0.12, 0.3, 0.26, -0.64, 4.62, 0, d.skin, head);
+    part(0.12, 0.3, 0.26, 0.64, 4.62, 0, d.skin, head);
+    for (const sx of [-0.26, 0.26]) {
+        part(0.26, 0.24, 0.04, sx, 4.72, 0.605, 0xffffff, head);
+        part(0.13, 0.18, 0.04, sx + (sx > 0 ? -0.04 : 0.04), 4.71, 0.625, 0x1a1420, head);
+        part(0.3, 0.07, 0.04, sx, 4.93, 0.61, d.hair, head);
+    }
+    part(0.36, 0.07, 0.04, 0, 4.34, 0.64, 0x6b2a2a, head);
+    if (d.beard) {
+        part(1.22, 0.3, 0.14, 0, 4.15, 0.56, d.hair, head);
+        part(0.14, 0.55, 0.7, -0.6, 4.35, 0.2, d.hair, head);
+        part(0.14, 0.55, 0.7, 0.6, 4.35, 0.2, d.hair, head);
+    }
+    buildHair((sx, sy, sz, x, y, z, c) => part(sx, sy, sz, x, y, z, c, head), d.hairStyle, d.hair);
+    // Legs (pivot at the hip) and arms (pivot at the shoulder)
     const legs = [], arms = [];
     for (const side of [-0.5, 0.5]) {
         const p = new T.Group(); p.position.set(side, 2, 0); g.add(p);
         part(1, 0.9, 1, 0, -0.45, 0, d.shorts, p);
+        part(0.04, 0.8, 0.5, side > 0 ? 0.51 : -0.51, -0.42, 0, accent, p);
         part(0.98, 1.1, 0.98, 0, -1.45, 0, d.socks, p);
+        part(1.0, 0.14, 1.0, 0, -1.0, 0, 0xffffff, p);
         part(1.05, 0.38, 1.3, 0, -1.84, 0.12, d.shoes || 0x141418, p);
         legs.push(p);
     }
     for (const side of [-1.5, 1.5]) {
         const p = new T.Group(); p.position.set(side, 3.9, 0); g.add(p);
         part(1, 0.8, 1, 0, -0.4, 0, d.shirt, p);
+        part(1.02, 0.1, 1.02, 0, -0.78, 0, accent, p);
         part(0.98, 1.2, 0.98, 0, -1.4, 0, d.gloves || d.skin, p);
         arms.push(p);
     }
-    g.userData.legs = legs; g.userData.arms = arms;
+    g.userData.legs = legs; g.userData.arms = arms; g.userData.head = head;
     return g;
 }
+
+// Signature celebration poses for the shop players ([left arm, right arm] as x/z rotations)
+const POSES = {
+    sky: { arms: [[2.7, -0.3], [2.7, 0.3]], head: -0.35 },
+    siu: { arms: [[0.1, -0.9], [0.1, 0.9]], legs: [0.28, -0.28] },
+    crossed: { arms: [[-1.25, 0.75], [-1.25, -0.75]] },
+    airplane: { arms: [[0, -1.5], [0, 1.5]] },
+    armsUp: { arms: [[3.0, -0.25], [3.0, 0.25]], head: -0.2 },
+    wave: { arms: [[0, -0.15], [2.8, 0.35]] },
+    hips: { arms: [[0.15, -0.45], [0.15, 0.45]] },
+    flex: { arms: [[0, -2.3], [0, 2.3]] },
+    cold: { arms: [[-0.7, 0.85], [-0.7, -0.85]], head: 0.1 },
+};
+// Applies a pose with a small breathing/sway motion driven by t
+export function posed(g, pose, t) {
+    const p = POSES[pose] || POSES.hips;
+    const u = g.userData, b = Math.sin(t * 2) * 0.05;
+    u.arms.forEach((a, i) => { a.rotation.x = p.arms[i][0] + b; a.rotation.z = p.arms[i][1] + (i ? b : -b) * 0.5; });
+    const lz = p.legs || [0, 0];
+    u.legs.forEach((l, i) => { l.rotation.x = 0; l.rotation.z = lz[i]; });
+    u.head.rotation.x = (p.head || 0) + Math.sin(t * 1.3) * 0.03;
+    g.position.y = g.userData.baseY + Math.abs(Math.sin(t * 2)) * 0.05;
+}
+
 export function animRig(g, phase, amt) {
     const s = Math.sin(phase) * amt;
     const u = g.userData;

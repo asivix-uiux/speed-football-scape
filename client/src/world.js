@@ -1,12 +1,12 @@
 import {
     T, V3, scene, mat, box, aabb, UNIT, solids, kills, triggers, prompts, tickers,
-    texFrom, billboard, textPlane, signBoard, buildRig, animRig, armsUp, football, hexCss,
+    texFrom, billboard, textPlane, signBoard, buildRig, armsUp, posed, football, hexCss, camera,
 } from './engine.js';
 import { S, actions } from './state.js';
 import { lavaMaterial, brickMaterial, bannerMaterial } from './textures.js';
-import { emitTread } from './fx.js';
+import { emitTread, bubble } from './fx.js';
 import {
-    CFG, LOBBY, STAGES, TREADMILLS, TREAD_GEO, PORTALS, PRODUCTS, PASSES, SOCCER, fmt, sci, clamp, rngFrom,
+    CFG, LOBBY, STAGES, TREADMILLS, TREAD_GEO, PORTALS, PRODUCTS, PASSES, SOCCER, RARITY, fmt, sci, clamp, rngFrom,
 } from '../../shared/config.js';
 
 const HX = LOBBY.halfX, HZ = LOBBY.halfZ, LOWER = LOBBY.lower, WALLH = LOBBY.wallHeight;
@@ -107,7 +107,8 @@ export function renderBoards(msg) {
 }
 
 function pedestalLines(d) {
-    const lines = [{ t: d.name, c: '#ffffff', s: '#16121f', px: 64 }];
+    const rar = RARITY[d.rarity] || RARITY.common;
+    const lines = [{ t: rar.name, c: hexCss(rar.color), s: '#16121f', px: 40 }, { t: d.name, c: '#ffffff', s: '#16121f', px: 64 }];
     if (d.tagline) lines.push({ t: d.tagline, c: '#ff4a4a', s: '#16121f', px: 44 });
     lines.push({ t: '+' + fmt(d.bonus) + ' Speed / step', c: '#7dff6b', s: '#16121f', px: 46 });
     if (S.equipped === d.id) lines.push({ t: 'EQUIPPED', c: '#6fe0ff', s: '#16121f', px: 48 });
@@ -116,27 +117,47 @@ function pedestalLines(d) {
     else lines.push({ t: '🏆 ' + fmt(d.req) + ' Wins', c: '#ffd028', s: '#16121f', px: 48 });
     return lines;
 }
+// Vertical fade used by the pedestal light columns
+const columnTex = (() => {
+    const c = document.createElement('canvas'); c.width = 4; c.height = 128;
+    const x = c.getContext('2d');
+    const g = x.createLinearGradient(0, 128, 0, 0);
+    g.addColorStop(0, 'rgba(255,255,255,0.95)'); g.addColorStop(0.35, 'rgba(255,255,255,0.35)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+    x.fillStyle = g; x.fillRect(0, 0, 4, 128);
+    return texFrom(c);
+})();
 function buildPedestal(d, pos, face) {
+    const rar = RARITY[d.rarity] || RARITY.common;
+    const glow = d.aura || rar.color;
     box(7.8, 0.5, 8.8, pos.x, pos.y + 0.25, pos.z, 0xeb8c1e, { decor: true });
     box(7, 1, 8, pos.x, pos.y + 0.6, pos.z, LC.pedestal);
-    if (d.aura) {
-        const ring = new T.Mesh(new T.CylinderGeometry(5.2, 5.2, 0.3, 32), mat(d.aura, { neon: true, opacity: 0.55 }));
-        ring.position.set(pos.x, pos.y + 0.2, pos.z); scene.add(ring);
-        const col = new T.Mesh(new T.CylinderGeometry(3.4, 3.4, 9, 24, 1, true), mat(d.aura, { neon: true, opacity: 0.18 }));
-        col.position.set(pos.x, pos.y + 5.6, pos.z); scene.add(col);
-    }
+    const ring = new T.Mesh(new T.CylinderGeometry(3.3, 3.3, 0.1, 40), mat(glow, { neon: true }));
+    ring.position.set(pos.x, pos.y + 1.12, pos.z); scene.add(ring);
+    const colMat = new T.MeshBasicMaterial({ map: columnTex, color: glow, transparent: true, opacity: 0.6, depthWrite: false, side: T.DoubleSide, blending: T.AdditiveBlending, toneMapped: false });
+    const col = new T.Mesh(new T.CylinderGeometry(3.1, 3.1, 9, 32, 1, true), colMat);
+    col.position.set(pos.x, pos.y + 5.6, pos.z); scene.add(col);
     const rig = buildRig(d);
+    rig.userData.baseY = pos.y + 1.1;
     rig.position.set(pos.x, pos.y + 1.1, pos.z);
     rig.rotation.y = Math.atan2(face.x, face.z);
     scene.add(rig);
-    const sp = billboard(pedestalLines(d), 9, 512, new V3(pos.x, pos.y + 10.5, pos.z));
+    const bubbleAt = new V3(pos.x, pos.y + 1.2, pos.z);
+    let acc = Math.random();
+    const phase = Math.random() * 6;
+    tickers.push((dt, t) => {
+        posed(rig, d.pose, t + phase);
+        colMat.opacity = 0.5 + Math.sin(t * 2 + phase) * 0.1;
+        if (camera.position.distanceToSquared(bubbleAt) > 110 * 110) return;
+        acc += dt * 3;
+        while (acc > 1) { acc -= 1; bubble(bubbleAt, glow); }
+    });
+    const sp = billboard(pedestalLines(d), 9, 512, new V3(pos.x, pos.y + 11.5, pos.z));
     shopItems.push({ d, sp, sig: '' });
     prompts.push({
         pos: new V3(pos.x, pos.y + 3, pos.z), r: 9,
         label: () => S.equipped === d.id ? 'Equipped' : S.owned[d.id] ? 'Equip ' + d.name : d.pass ? 'Buy ' + d.name : S.wins >= d.req ? 'Unlock ' + d.name : 'Need ' + fmt(d.req) + ' Wins',
         act: () => actions.shop(d),
     });
-    tickers.push((dt, t) => animRig(rig, t * 2 + pos.z, 0.08));
 }
 
 export function treadLocked(def) {
@@ -251,7 +272,7 @@ function buildLobby() {
     for (const d of SOCCER) if (!d.special) rows[d.row].push(d);
     const rowX = { 1: -HX + 20, 2: -HX + 7 }, rowY = { 1: 1.5, 2: 5 };
     for (const r of [1, 2]) rows[r].forEach((d, i) => {
-        const z = (i - (rows[r].length - 1) / 2) * 13.5;
+        const z = (i - (rows[r].length - 1) / 2) * 13.5 + (r === 2 ? 6.75 : 0);
         buildPedestal(d, new V3(rowX[r], rowY[r], z), new V3(1, 0, 0));
     });
     signBoard(new V3(-HX + 0.3, 37, 0), new V3(1, 0, 0), 46, 11, [{ t: 'BUY SOCCER', c: '#ffffff', s: '#16121f', px: 120 }, { t: 'PLAYERS', c: '#ffffff', s: '#16121f', px: 120 }], LC.shopSign);
@@ -354,7 +375,7 @@ function chevrons(z0, count) {
     }
 }
 function stageSigns(s) {
-    textPlane([{ t: s.name, c: '#ffffff', s: '#16121f', px: 150 }, { t: s.sub, c: s.subColor, s: '#16121f', px: 120 }], 30, 1024, new V3(0, 28, s.zS + 3), new V3(0, 28, s.zS - 10));
+    textPlane([{ t: s.name, c: '#ffffff', s: '#16121f', px: 150 }, { t: s.sub, c: s.subColor, s: '#16121f', px: 120 }], 30, 1024, new V3(0, 33.5, s.zS + 0.2), new V3(0, 33.5, s.zS - 10));
     const pz = s.zS + 22;
     box(0.4, 5, 12, -CFG.courseWidth / 2 + 0.2, 8, pz, CC.plaque, { decor: true });
     textPlane([{ t: 'Recommended :', c: '#ffffff', s: '#16121f', px: 60 }, { t: 'Lvl : ' + s.rec, c: '#ffd028', s: '#16121f', px: 70 }], 10, 512, new V3(-CFG.courseWidth / 2 + 0.5, 8, pz), new V3(10, 8, pz));
@@ -494,6 +515,7 @@ function buildCourse() {
         doubleWinsPad(10, s.cE + 22);
         goalWithKeeper(new V3(W / 2 - 4, 0, s.cE + 38), new V3(-1, 0, 0), KEEPER);
         stageSigns(s);
+        stageGate(s, idx);
         const tr = aabb(0, 20, s.zS + 3, W, 60, 2);
         tr.enter = () => actions.enterStage(idx);
         triggers.push(tr);
@@ -503,6 +525,68 @@ function buildCourse() {
             textPlane([{ t: 'YOU ESCAPED!', c: '#ffd028', s: '#16121f', px: 150 }, { t: 'More stages coming soon', c: '#ffffff', s: '#16121f', px: 70 }], 34, 1024, new V3(0, 24, s.zE - 0.2), new V3(0, 24, s.zE - 20));
         }
     });
+}
+
+// =====================================================================================
+// Stage gates: orange frame with an animated hex force field you run through
+// =====================================================================================
+const GATE_H = 26;
+const gates = [];
+function stageGate(s, idx) {
+    const W = CFG.courseWidth, z = s.zS + 1, fw = W - 4;
+    for (const sx of [-1, 1]) {
+        box(2, GATE_H + 2, 2.4, sx * (W / 2 - 1), (GATE_H + 2) / 2, z, CC.pillar, { decor: true });
+        box(0.5, GATE_H, 0.6, sx * (fw / 2 + 0.2), GATE_H / 2, z - 1.3, 0xffe0a0, { neon: true, decor: true });
+    }
+    box(W, 2, 2.4, 0, GATE_H + 1, z, CC.pillar, { decor: true });
+    box(fw, 0.5, 0.6, 0, GATE_H - 0.2, z - 1.3, 0xffe0a0, { neon: true, decor: true });
+    const m = new T.ShaderMaterial({
+        uniforms: {
+            uTime: { value: 0 }, uRip: { value: 9 }, uRipC: { value: new T.Vector2(0.5, 0.2) },
+            uColor: { value: new T.Color(s.subColor) }, uAspect: { value: fw / GATE_H },
+        },
+        vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+        fragmentShader: `
+            uniform float uTime, uRip, uAspect; uniform vec2 uRipC; uniform vec3 uColor; varying vec2 vUv;
+            float hexDist(vec2 p) { p = abs(p); return max(dot(p, normalize(vec2(1.0, 1.7320508))), p.x); }
+            void main() {
+                vec2 uv = vec2(vUv.x * uAspect, vUv.y) * 8.0;
+                vec2 r = vec2(1.0, 1.7320508), h = r * 0.5;
+                vec2 a = mod(uv, r) - h, b = mod(uv - h, r) - h;
+                vec2 gv = dot(a, a) < dot(b, b) ? a : b;
+                vec2 id = uv - gv;
+                float edge = smoothstep(0.40, 0.49, hexDist(gv));
+                float shimmer = pow(0.5 + 0.5 * sin(uTime * 2.2 + id.x * 0.9 + id.y * 1.7), 8.0);
+                float scan = exp(-pow((fract(uTime * 0.28) * 1.4 - 0.2 - vUv.y) * 9.0, 2.0));
+                vec2 d = vec2((vUv.x - uRipC.x) * uAspect, vUv.y - uRipC.y);
+                float ring = exp(-pow(length(d) - uRip * 1.8, 2.0) * 40.0) * clamp(1.0 - uRip / 1.1, 0.0, 1.0);
+                float flash = clamp(1.0 - uRip * 2.5, 0.0, 1.0) * 0.45;
+                float fade = smoothstep(0.0, 0.05, vUv.x) * smoothstep(1.0, 0.95, vUv.x) * (0.55 + 0.45 * (1.0 - vUv.y));
+                float alpha = (0.05 + edge * 0.32 + shimmer * 0.2 + scan * 0.22 + ring * 0.9 + flash) * fade;
+                vec3 col = uColor * (0.55 + edge * 0.7 + shimmer * 0.5 + ring * 1.2) + vec3(ring * 0.5 + flash);
+                gl_FragColor = vec4(col * alpha, alpha);
+                #include <colorspace_fragment>
+            }`,
+        transparent: true, depthWrite: false, side: T.DoubleSide, blending: T.AdditiveBlending, toneMapped: false,
+    });
+    const field = new T.Mesh(new T.PlaneGeometry(fw, GATE_H), m);
+    field.position.set(0, GATE_H / 2, z);
+    scene.add(field);
+    gates[idx] = { m, fw };
+}
+// Ripple from where the player broke through the field
+export function gatePulse(idx, x, y) {
+    const g = gates[idx];
+    if (!g) return;
+    g.m.uniforms.uRip.value = 0;
+    g.m.uniforms.uRipC.value.set(clamp(x / g.fw + 0.5, 0, 1), clamp((y + 2.5) / GATE_H, 0, 1));
+}
+export function updateGates(t, dt) {
+    for (const g of gates) {
+        if (!g) continue;
+        g.m.uniforms.uTime.value = t;
+        g.m.uniforms.uRip.value += dt;
+    }
 }
 
 // Falling walls run on the server clock so every player sees the same timing.

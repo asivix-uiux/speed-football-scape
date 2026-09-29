@@ -120,6 +120,29 @@ export const SOCCER = [
     P_('PrimeMessi', 'Prime Messi', 10000, 0, 10, 0, 0xf5f5fa, 0x14141e, 0xf5f5fa, 0xe1af87, 0x462d19, '#14141e', { pass: 'PrimeMessi', special: true, tagline: '*X10 VALUE*', aura: 0x288cff, stripes: 0x78bef0 }),
     P_('PrimeRonaldo', 'Prime Ronaldo', 25000, 0, 7, 0, 0xd2141e, 0xf5f5f5, 0x141419, 0xd7a578, 0x19140f, '#ffffff', { pass: 'PrimeRonaldo', special: true, tagline: '*INSANE VALUE*', aura: 0xff323c }),
 ];
+// Stylised looks: hair style, beard, boot colour, signature celebration pose, rarity
+const LOOKS = {
+    Yamal: { hairStyle: 'curly', shoes: 0xff3fa0, pose: 'airplane', rarity: 'common', label: 'YAMAL' },
+    Saka: { hairStyle: 'buzz', shoes: 0xffd028, pose: 'armsUp', rarity: 'common' },
+    Dembele: { hairStyle: 'curly', beard: true, shoes: 0x28c8ff, pose: 'hips', rarity: 'common' },
+    Ramos: { hairStyle: 'slick', beard: true, shoes: 0xf5f5f5, pose: 'flex', rarity: 'rare' },
+    Palmer: { hairStyle: 'crop', shoes: 0x46ec50, pose: 'cold', rarity: 'rare' },
+    Lewandowski: { hairStyle: 'fade', shoes: 0xff6e14, pose: 'hips', rarity: 'epic', label: 'LEWANDOWSKI' },
+    Neymar: { hairStyle: 'mohawk', beard: true, shoes: 0xffd028, pose: 'wave', rarity: 'epic', label: 'NEYMAR JR' },
+    Mbappe: { hairStyle: 'buzz', shoes: 0xf5f5f5, pose: 'crossed', rarity: 'legendary' },
+    Messi: { hairStyle: 'short', beard: true, shoes: 0xff3fa0, pose: 'sky', rarity: 'legendary' },
+    Ronaldo: { hairStyle: 'quiff', shoes: 0x28c8ff, pose: 'siu', rarity: 'legendary' },
+    PrimeMessi: { hairStyle: 'long', shoes: 0xffd028, pose: 'sky', rarity: 'mythic', label: 'MESSI' },
+    PrimeRonaldo: { hairStyle: 'quiff', shoes: 0xf5f5f5, pose: 'siu', rarity: 'mythic', label: 'RONALDO' },
+};
+for (const p of SOCCER) Object.assign(p, { label: p.name.toUpperCase() }, LOOKS[p.id] || {});
+export const RARITY = {
+    common: { name: 'COMMON', color: 0x6fe0ff },
+    rare: { name: 'RARE', color: 0x46ec50 },
+    epic: { name: 'EPIC', color: 0xc428ff },
+    legendary: { name: 'LEGENDARY', color: 0xffd028 },
+    mythic: { name: 'MYTHIC', color: 0xff3c50 },
+};
 export const soccerById = Object.fromEntries(SOCCER.map((p) => [p.id, p]));
 
 export const AURAS = [

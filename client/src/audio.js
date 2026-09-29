@@ -250,6 +250,10 @@ const SFX = {
         SFX.whistle(t + 0.05);
         [72, 76, 79, 84, 88].forEach((n, i) => tone(t + 0.1 + i * 0.07, 'square', midi(n), null, 0.3, 0.08));
     },
+    gate(t) {
+        [84, 88, 91, 96, 100].forEach((n, i) => tone(t + i * 0.035, 'sine', midi(n), null, 0.5, 0.09));
+        tone(t, 'triangle', 220, 880, 0.35, 0.12);
+    },
     firework(t) { tone(t, 'sine', 900, 200, 0.35, 0.06); noise(t + 0.35, 0.4, 'lowpass', 2500, 0.8, 0.35, sfxBus); },
 };
 export function sfx(name) {
