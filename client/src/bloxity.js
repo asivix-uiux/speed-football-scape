@@ -3,7 +3,7 @@
 // Every call is guarded, so the game still runs when the SDK is missing
 // (blocked network, older SDK build, local dev without internet).
 
-import { SKUS } from '../../shared/config.js';
+import { SKUS, PRODUCTS, PASSES } from '../../shared/config.js';
 
 export const GAME_SLUG = 'speed-football-scape';
 
@@ -107,12 +107,32 @@ export const getInviteLink = () => call('social.getInviteFriendsLink') || locati
 export async function inviteFriend(id) { try { return !!(await call('social.inviteFriend', id)); } catch (e) { return false; } }
 
 // ----- Bux -----
-// Every Robux-style button maps to a SKU in the game's Bloxity IAP catalog (shared/config.js).
+// Every store button maps to a SKU in the game's Bloxity IAP catalog (shared/config.js).
 // Prices live in that catalog (Bloxity developer panel), never in the game.
 export async function buyWithBux(kind, key, metadata) {
     const sku = SKUS[kind] && SKUS[kind][key];
     if (!sku || !has('bux.requestPurchase')) return { success: false, error: 'Bux unavailable' };
     try { return (await call('bux.requestPurchase', sku, metadata || {})) || { success: false }; } catch (e) { return { success: false, error: e.message }; }
+}
+// Replace the default prices with the live Bux prices from this game's IAP catalog.
+// Items the catalog doesn't have yet keep their defaults.
+export async function loadCatalogPrices() {
+    if (!has('api.get')) return false;
+    let changed = false;
+    const jobs = [];
+    for (const kind of ['product', 'pass']) {
+        for (const [key, sku] of Object.entries(SKUS[kind])) {
+            jobs.push(Promise.resolve(call('api.get', `/v1/games/${GAME_SLUG}/iaps/${sku}`)).then((r) => {
+                const price = r && (r.price ?? (r.product && r.product.price) ?? (r.iap && r.iap.price));
+                if (typeof price === 'number' && price >= 0) {
+                    (kind === 'pass' ? PASSES : PRODUCTS)[key].price = price;
+                    changed = true;
+                }
+            }).catch(() => {}));
+        }
+    }
+    await Promise.all(jobs);
+    return changed;
 }
 export async function getBuxBalance() { try { return (await call('bux.getBalance')) || 0; } catch (e) { return 0; } }
 

@@ -941,6 +941,7 @@ async function boot() {
     loadBase().catch(() => {}); // warm up the Bloxity body model
     wirePortalSettings();
     wirePortalEvents();
+    BX.loadCatalogPrices().then((changed) => { if (changed) refreshShop(); });
     BX.onIdentity((id) => {
         showIdentity(id);
         // Logged in after joining: move this session onto the Bloxity profile
@@ -948,6 +949,7 @@ async function boot() {
         if (net.room) { setupLocalAvatar(); syncMyAvatar(); }
     });
     $('#acctBtn').addEventListener('click', toggleLogin);
+    $('#acctPfp').addEventListener('error', (e) => { e.target.hidden = true; });
     $('#playBtn').addEventListener('click', play);
     $('#reconnectBtn').addEventListener('click', () => location.reload());
     unlockAudioOnGesture();

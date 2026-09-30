@@ -59,7 +59,7 @@ button:focus-visible { outline: 3px solid var(--blue); outline-offset: 2px; }
 .sq .lb { font-size: 0.95rem; line-height: 1; }
 .badge { position: absolute; top: -0.5rem; right: -0.5rem; background: var(--red); border: 2px solid var(--ink); border-radius: 1rem; font-size: 0.8rem; padding: 0.05rem 0.4rem; font-weight: 700; }
 
-#stats { position: absolute; right: max(1rem, env(safe-area-inset-right, 0px)); top: calc(env(safe-area-inset-top, 0px) + 0.8rem); display: flex; flex-direction: column; align-items: flex-end; gap: 0.4rem; }
+#stats { position: absolute; right: max(1rem, env(safe-area-inset-right, 0px)); top: calc(env(safe-area-inset-top, 0px) + 4.4rem); display: flex; flex-direction: column; align-items: flex-end; gap: 0.4rem; }
 .stat { display: flex; align-items: center; gap: 0.45rem; background: rgba(22, 18, 31, 0.55); border: 2px solid rgba(255, 255, 255, 0.25); border-radius: 2rem; padding: 0.2rem 0.9rem 0.2rem 0.5rem; font-size: 1.5rem; font-weight: 700; font-variant-numeric: tabular-nums; }
 .stat .ic { font-size: 1.5rem; }
 
@@ -129,7 +129,13 @@ body.touch #bottom { bottom: calc(env(safe-area-inset-bottom, 0px) + 0.5rem); wi
     #offer .tt { font-size: 0.95rem; white-space: nowrap; }
     #offer .yes, #offer .no { font-size: 0.8rem; padding: 0.25rem 0.45rem; }
     #leftCol { top: 58%; }
+    #acctName { display: none; }
+    /* Top-left belongs to the Bloxity overlay; on phones the offer banner has no safe spot, the Store covers it */
+    #offer { display: none !important; }
 }
+/* Bux coin */
+.bx { display: inline-block; width: 1em; height: 1em; margin-right: 0.18em; vertical-align: -0.12em; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #fff6b0 0 18%, #ffd23a 40%, #e79a0c 100%); box-shadow: inset 0 0 0 0.09em #b86f00, 0 0.06em 0 rgba(0, 0, 0, 0.35); position: relative; font-style: normal; }
+.bx::after { content: "B"; position: absolute; inset: 0; display: grid; place-items: center; font: 700 0.62em/1 var(--font); color: #9a5a00; text-shadow: none; }
 body.touch #sprintHint { display: none; }
 
 /* Panels ----------------------------------------------------------------- */
@@ -193,15 +199,15 @@ body.touch #tips { bottom: calc(env(safe-area-inset-bottom, 0px) + 16rem); }
 .sq .ic { transition: transform 0.25s cubic-bezier(0.34, 1.8, 0.5, 1); }
 .sq:hover .ic { transform: rotate(-10deg) scale(1.15); }
 
-#acct { position: absolute; left: calc(max(1rem, env(safe-area-inset-left, 0px)) + 3.6rem); top: calc(env(safe-area-inset-top, 0px) + 0.8rem); display: flex; align-items: center; gap: 0.5rem; background: rgba(22, 18, 31, 0.6); border: 2px solid rgba(255, 255, 255, 0.25); border-radius: 2rem; padding: 0.2rem 0.3rem 0.2rem 0.3rem; max-width: 60vw; }
+#acct { position: absolute; right: calc(max(1rem, env(safe-area-inset-right, 0px)) + 3.6rem); top: calc(env(safe-area-inset-top, 0px) + 0.8rem); display: flex; align-items: center; gap: 0.5rem; background: rgba(22, 18, 31, 0.6); border: 2px solid rgba(255, 255, 255, 0.25); border-radius: 2rem; padding: 0.2rem 0.3rem 0.2rem 0.3rem; max-width: 60vw; }
 #acctPfp { width: 2.2rem; height: 2.2rem; border-radius: 50%; object-fit: cover; background: #2b2442; }
 #acctName { font-size: 1.05rem; font-weight: 700; max-width: 11rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-left: 0.3rem; }
 #acctBtn { font-size: 0.85rem; padding: 0.25rem 0.7rem; border-radius: 1rem; }
-#fps { position: absolute; left: max(1rem, env(safe-area-inset-left, 0px)); top: calc(env(safe-area-inset-top, 0px) + 4.4rem); font-size: 0.9rem; font-weight: 700; color: #7dff6b; font-variant-numeric: tabular-nums; }
+#fps { position: absolute; right: max(1rem, env(safe-area-inset-right, 0px)); top: calc(env(safe-area-inset-top, 0px) + 14.2rem); font-size: 0.9rem; font-weight: 700; color: #7dff6b; font-variant-numeric: tabular-nums; }
 .invite-row { display: flex; gap: 0.5rem; }
 .invite-row input { flex: 1; min-width: 0; font: 600 0.9rem var(--font); border: 2px solid var(--ink); border-radius: 0.5rem; padding: 0.35rem 0.5rem; background: #f4f0ff; color: var(--ink); }
 .invite-row .btn { font-size: 0.95rem; padding: 0.35rem 0.8rem; }
-#btnSettings { position: absolute; left: max(1rem, env(safe-area-inset-left, 0px)); top: calc(env(safe-area-inset-top, 0px) + 0.8rem); width: 3rem; height: 3rem; border-radius: 50%; font-size: 1.4rem; padding: 0; }
+#btnSettings { position: absolute; right: max(1rem, env(safe-area-inset-right, 0px)); top: calc(env(safe-area-inset-top, 0px) + 0.8rem); width: 3rem; height: 3rem; border-radius: 50%; font-size: 1.4rem; padding: 0; }
 
 .overlay:not([hidden]) { animation: fadeIn 0.2s ease; }
 .overlay:not([hidden]) .panel { animation: popIn 0.34s cubic-bezier(0.2, 1.5, 0.4, 1); }
@@ -272,7 +278,7 @@ body.touch #tips { bottom: calc(env(safe-area-inset-bottom, 0px) + 16rem); }
     <div id="hud" hidden>
         <div id="offer">
             <span class="ic" id="offerIc">🎁</span>
-            <div class="tx"><span class="tt o1" id="offerTitle">OP STARTER PACK</span><span class="sub" id="offerSub">⏰ 15:00 · ONLY ⏣19</span></div>
+            <div class="tx"><span class="tt o1" id="offerTitle">OP STARTER PACK</span><span class="sub" id="offerSub">⏰ 15:00 · ONLY <i class="bx" aria-hidden="true"></i>19</span></div>
             <button class="btn g-green yes o1" id="offerYes">YES</button>
             <button class="btn g-red no o1" id="offerNo">NO</button>
         </div>
@@ -310,10 +316,10 @@ body.touch #tips { bottom: calc(env(safe-area-inset-bottom, 0px) + 16rem); }
                 <div class="row"><input id="speedInput" type="number" inputmode="numeric" min="16" value="16"></div>
                 <small id="maxSpeedTxt">Max: 16</small>
             </div>
-            <button class="btn pbtn g-pink" id="btn2x"><span class="o1">⚡ 2x Speed</span><span class="price" id="price2x">⏣3</span></button>
-            <button class="btn pbtn g-yellow" data-product="Speed10K"><span class="o1">👟 +10K</span><span class="price">⏣29</span></button>
-            <button class="btn pbtn g-yellow" data-product="Speed100K"><span class="o1">👟 +100K</span><span class="price">⏣79</span></button>
-            <button class="btn pbtn g-yellow" data-product="Speed1M"><span class="o1">👟 +1M</span><span class="price">⏣149</span></button>
+            <button class="btn pbtn g-pink" id="btn2x"><span class="o1">⚡ 2x Speed</span><span class="price" id="price2x"><i class="bx" aria-hidden="true"></i>3</span></button>
+            <button class="btn pbtn g-yellow" data-product="Speed10K"><span class="o1">👟 +10K</span><span class="price" data-price="Speed10K"><i class="bx" aria-hidden="true"></i>29</span></button>
+            <button class="btn pbtn g-yellow" data-product="Speed100K"><span class="o1">👟 +100K</span><span class="price" data-price="Speed100K"><i class="bx" aria-hidden="true"></i>79</span></button>
+            <button class="btn pbtn g-yellow" data-product="Speed1M"><span class="o1">👟 +1M</span><span class="price" data-price="Speed1M"><i class="bx" aria-hidden="true"></i>149</span></button>
         </div>
 
         <div id="boost" class="o passive" hidden></div>
@@ -345,11 +351,11 @@ body.touch #tips { bottom: calc(env(safe-area-inset-bottom, 0px) + 16rem); }
 
     <div id="buy" class="overlay" hidden>
         <div class="panel" role="dialog" aria-labelledby="buyTitle">
-            <header><h2 class="o" id="buyTitle">Buy item</h2></header>
+            <header><h2 class="o" id="buyTitle">Buy with Bux</h2></header>
             <div class="buy-body">
                 <div class="item o1" id="buyItem">2x Speed</div>
-                <div class="cost o1" id="buyCost">⏣ 3</div>
-                <p class="note">Web demo: purchases are free here. On Bloxity they are paid with Bux.</p>
+                <div class="cost o1" id="buyCost"><i class="bx" aria-hidden="true"></i>3 Bux</div>
+                <p class="note">Paid with Bux, the Bloxity currency. Free while this demo runs without a Bux catalog.</p>
                 <div class="acts"><button class="btn g-green o1" id="buyOk">Buy</button><button class="btn g-grey o1" id="buyCancel">Cancel</button></div>
             </div>
         </div>
@@ -361,7 +367,7 @@ body.touch #tips { bottom: calc(env(safe-area-inset-bottom, 0px) + 16rem); }
             <div class="buy-body">
                 <div class="item o1">Revive where you fell?</div>
                 <div id="reviveTimer">Returning to lobby in 10s</div>
-                <div class="acts"><button class="btn g-green o1" id="reviveYes">⏣ 9</button><button class="btn g-red o1" id="reviveNo">No!</button></div>
+                <div class="acts"><button class="btn g-green o1" id="reviveYes"><i class="bx" aria-hidden="true"></i>9 Bux</button><button class="btn g-red o1" id="reviveNo">No!</button></div>
             </div>
         </div>
     </div>

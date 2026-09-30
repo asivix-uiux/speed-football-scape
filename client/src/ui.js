@@ -7,6 +7,10 @@ import {
     CFG, PRODUCTS, PASSES, OFFERS, AURAS, FREE, xpFor, maxSpeedFor, fmt, clock, clamp,
 } from '../../shared/config.js';
 
+// Bux coin + amount (our own strings only; never user text)
+const bux = (n) => '<i class="bx" aria-hidden="true"></i>' + fmt(n);
+function setHtml(node, html) { if (node && node.innerHTML !== html) node.innerHTML = html; }
+
 const el = {
     wins: $('#winsVal'), speed: $('#speedVal'), rebStat: $('#rebirthStat'), reb: $('#rebirthVal'), online: $('#onlineVal'),
     xpFill: $('#xpFill'), levelTxt: $('#levelTxt'), xpTxt: $('#xpTxt'), stamFill: $('#stamFill'), stamTxt: $('#stamTxt'),
@@ -46,7 +50,9 @@ export function updateHud(P, online) {
     const max = maxSpeedFor(S.level, S.rebirths);
     el.maxSpeed.textContent = 'Max: ' + max;
     if (document.activeElement !== el.input) el.input.value = S.customSpeed > 0 && S.customSpeed <= max ? S.customSpeed : max;
-    el.price2x.textContent = S.passes.DoubleSpeed ? 'OWNED' : '⏣' + PASSES.DoubleSpeed.price;
+    setHtml(el.price2x, S.passes.DoubleSpeed ? 'OWNED' : bux(PASSES.DoubleSpeed.price));
+    document.querySelectorAll('[data-price]').forEach((n) => setHtml(n, bux(PRODUCTS[n.dataset.price].price)));
+    setHtml($('#reviveYes'), bux(PRODUCTS.Revive.price) + ' Bux');
     const boostLeft = (S.boostUntil - net.now()) / 1000;
     el.boost.hidden = boostLeft <= 0;
     if (boostLeft > 0) el.boost.textContent = '⚡ x' + CFG.boostMult + ' SPEED BOOST ' + clock(boostLeft);
@@ -69,7 +75,7 @@ function updateOffer() {
     el.offerIc.textContent = o.ic;
     el.offerTitle.textContent = o.title;
     const price = o.kind === 'pass' ? PASSES[o.key].price : PRODUCTS[o.key].price;
-    el.offerSub.textContent = (o.key === 'StarterPack' ? '⏰ ' + clock(packLeft) + ' · ' : '') + 'ONLY ⏣' + price;
+    setHtml(el.offerSub, (o.key === 'StarterPack' ? '⏰ ' + clock(packLeft) + ' · ' : '') + 'ONLY ' + bux(price));
     el.offer.dataset.kind = o.kind; el.offer.dataset.key = o.key;
 }
 $('#offerYes').addEventListener('click', () => buy(el.offer.dataset.kind, el.offer.dataset.key));
@@ -119,7 +125,7 @@ export function buy(kind, key) {
     if (net.bux) { buyBux(kind, key); return; }
     pendingBuy = { kind, key };
     $('#buyItem').textContent = item.name;
-    $('#buyCost').textContent = '⏣ ' + item.price;
+    setHtml($('#buyCost'), bux(item.price) + ' Bux');
     $('#buy').hidden = false;
 }
 // Bloxity shows its own confirm modal; the grant arrives from the server after its webhook
@@ -214,7 +220,7 @@ function rowCard(ic, name, desc, btnText, btnClass, onClick, disabled) {
     d.querySelector('.ds').textContent = desc;
     const b = d.querySelector('button');
     b.classList.add(btnClass);
-    b.textContent = btnText; b.disabled = !!disabled;
+    setHtml(b, btnText); b.disabled = !!disabled;
     b.addEventListener('click', onClick);
     return d;
 }
@@ -246,11 +252,11 @@ function renderModal() {
         for (const a of AURAS) {
             const owned = S.auras[a.id] || (a.pass ? S.passes[a.pass] : S.wins >= a.req);
             const on = S.aura === a.id;
-            const desc = 'x' + a.mult + ' Speed · ' + (a.pass ? '⏣' + PASSES[a.pass].price : '🏆 ' + fmt(a.req) + ' Wins');
+            const desc = 'x' + a.mult + ' Speed · ' + (a.pass ? 'Game pass' : '🏆 ' + fmt(a.req) + ' Wins');
             let btn, cls, fn;
             if (on) { btn = 'Unequip'; cls = 'g-grey'; fn = () => net.send('aura', { id: '' }); }
             else if (owned) { btn = 'Equip'; cls = 'g-green'; fn = () => net.send('aura', { id: a.id }); }
-            else if (a.pass) { btn = '⏣' + PASSES[a.pass].price; cls = 'g-pink'; fn = () => buy('pass', a.pass); }
+            else if (a.pass) { btn = bux(PASSES[a.pass].price); cls = 'g-pink'; fn = () => buy('pass', a.pass); }
             else { btn = '🔒 Locked'; cls = 'g-grey'; fn = () => toast('Need ' + fmt(a.req - S.wins) + ' more Wins!', '#ff5a5a'); }
             body.appendChild(rowCard(a.ic, a.name, desc, btn, cls, fn));
         }
@@ -268,13 +274,13 @@ function renderModal() {
         body.appendChild(sec('Speed'));
         for (const k of ['Speed10K', 'Speed100K', 'Speed1M']) {
             const p = PRODUCTS[k];
-            body.appendChild(rowCard('👟', p.name, 'Instant Speed', '⏣' + p.price, 'g-yellow', () => buy('product', k)));
+            body.appendChild(rowCard('👟', p.name, 'Instant Speed', bux(p.price), 'g-yellow', () => buy('product', k)));
         }
-        body.appendChild(rowCard('⏱️', 'x2 Speed Boost', '15 minutes of double Speed', '⏣' + PRODUCTS.SpeedBoost.price, 'g-yellow', () => buy('product', 'SpeedBoost')));
+        body.appendChild(rowCard('⏱️', 'x2 Speed Boost', '15 minutes of double Speed', bux(PRODUCTS.SpeedBoost.price), 'g-yellow', () => buy('product', 'SpeedBoost')));
         body.appendChild(sec('Game passes'));
         for (const k of Object.keys(PASSES)) {
             const p = PASSES[k], owned = !!S.passes[k];
-            body.appendChild(rowCard(p.ic, p.name, p.desc, owned ? 'OWNED' : '⏣' + p.price, owned ? 'g-grey' : 'g-green', () => buy('pass', k), owned));
+            body.appendChild(rowCard(p.ic, p.name, p.desc, owned ? 'OWNED' : bux(p.price), owned ? 'g-grey' : 'g-green', () => buy('pass', k), owned));
         }
     }
 }

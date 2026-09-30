@@ -109,6 +109,8 @@ export const SKUS = {
         PrimeMessi: 'pass_prime_messi', PrimeRonaldo: 'pass_prime_ronaldo', RainbowAura: 'pass_rainbow_aura',
     },
 };
+// Bux price label for 3D text (DOM uses the coin icon instead)
+export const buxText = (n) => fmt(n) + ' Bux';
 export function skuLookup(sku) {
     for (const kind of ['product', 'pass']) for (const [key, s] of Object.entries(SKUS[kind])) if (s === sku) return { kind, key };
     return null;

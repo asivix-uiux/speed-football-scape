@@ -55,7 +55,10 @@ Controllers use the browser Gamepad API (standard mapping), so any XInput-style 
 
 ## Purchases
 
-Every Robux button is free in this demo. `SpeedRoom.onBuy` in `server/src/SpeedRoom.js` is where real payments hook in.
+Everything is priced in **Bux**, the Bloxity currency.
+- Each store item maps to a SKU (`SKUS` in `shared/config.js`). Prices come from the game's Bloxity IAP catalog; the numbers in `PRODUCTS`/`PASSES` are only defaults.
+- Without a catalog the game runs in demo mode, where purchases are free.
+- Set `LEGION_WEBHOOK_SECRET` on the server to switch to Bux mode. Purchases then go through the Bloxity confirm modal, and `POST /api/legion-webhook` grants them.
 
 ## Deploy
 
