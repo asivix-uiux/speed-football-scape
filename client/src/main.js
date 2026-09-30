@@ -190,6 +190,14 @@ function updateBalls() {
         b.m.position.set(b.x, b.y, z);
         b.m.rotation.x = -(b.s.bs * age) / b.r;
         if (age > CFG.ballLifetime || z < b.s.zS + 10) { scene.remove(b.m); balls.splice(i, 1); continue; }
+        // Dust kicked up behind rolling balls near the camera
+        const wall = performance.now();
+        if (wall > (b.dustT || 0) && Math.abs(z - camera.position.z) < 90) {
+            b.dustT = wall + 110;
+            dust(new V3(b.x + (Math.random() - 0.5) * b.r, 0, z + b.r * 0.7), 1, 0.9);
+        }
+        // A near miss rumbles the camera once
+        if (!b.passed && Math.abs(z - P.pos.z) < 2 && Math.abs(b.x - P.pos.x) < b.r + 5 && !P.dead) { b.passed = true; addShake(0.18); }
         if (P.dead || P.shield > 0) continue;
         const cx = clamp(b.x, P.pos.x - HW, P.pos.x + HW), cy = clamp(b.y, P.pos.y, P.pos.y + PH), cz = clamp(z, P.pos.z - HW, P.pos.z + HW);
         const dx = cx - b.x, dy = cy - b.y, dz = cz - z;
@@ -604,7 +612,7 @@ function padButtons() {
     if (!p.size) return;
     const overlay = ['#start', '#offline', '#buy', '#revive', '#modal'].find(shown);
     if (overlay) pad.jump = false;
-    if (overlay === '#start') { if ((p.has('A') || p.has('START')) && !$('#playBtn').disabled && shown('#joinRow')) play(); return; }
+    if (overlay === '#start') { if ((p.has('A') || p.has('START')) && shown('#playBtn')) play(); return; }
     if (overlay === '#offline') { if (p.has('A')) $('#reconnectBtn').click(); return; }
     if (overlay === '#buy') { if (p.has('A')) $('#buyOk').click(); else if (p.has('B')) $('#buyCancel').click(); return; }
     if (overlay === '#revive') { if (p.has('A')) $('#reviveYes').click(); else if (p.has('B')) $('#reviveNo').click(); return; }
@@ -635,7 +643,6 @@ function padButtons() {
     if (['Y', 'LB', 'RB', 'BACK', 'START'].some((b) => p.has(b))) focusStep($('#modal'), 1);
 }
 onGamepadConnection((g, on) => {
-    $('#padHint').hidden = !on;
     if (running) toast(on ? '🎮 Controller connected' : '🎮 Controller disconnected', on ? '#7dff6b' : '#ffb51c');
 });
 let sprintHintPad = null;
@@ -813,7 +820,6 @@ function frame(now) {
         // First frame after setup: apply portal settings and lift the Bloxity loading overlay
         loadingSignaled = true;
         BX.triggerAllSettings();
-        BX.loadingEnd();
     }
     pollGamepad();
     padButtons();
@@ -824,24 +830,34 @@ function frame(now) {
     requestAnimationFrame(frame);
 }
 
+// Straight into the game: no menu. Joins with the Bloxity name (or guest name) automatically.
+let joining = false;
 async function play() {
-    const nameInput = $('#nameInput');
-    const name = nameInput.value.trim().slice(0, 20);
-    if (name) storageSet('sfs_name', name);
-    const btn = $('#playBtn'), err = $('#connectErr');
-    btn.disabled = true; btn.textContent = 'JOINING…'; err.hidden = true;
+    if (joining || running) return;
+    joining = true;
+    const err = $('#connectErr'), retry = $('#playBtn');
+    err.hidden = true; retry.hidden = true;
+    $('#loading').hidden = false;
+    $('#loading').textContent = 'Joining…';
+    BX.loadingStep('Joining a server…');
     initAudio();
     try {
-        const room = await connect(BX.identity().loggedIn ? '' : name);
+        await waitForLogin(1500);
+        const saved = (storageGet('sfs_name') || '').slice(0, 20);
+        const room = await connect(BX.identity().loggedIn ? '' : saved);
         const me = room.state.players && room.state.players.get(room.sessionId);
-        S.name = me ? me.name : name;
+        S.name = me ? me.name : S.name;
     } catch (e) {
         console.error(e);
+        joining = false;
+        $('#loading').hidden = true;
         err.hidden = false;
         err.textContent = 'Could not reach the game server. Check your connection and try again.';
-        btn.disabled = false; btn.textContent = 'PLAY';
+        retry.hidden = false;
+        BX.loadingEnd();
         return;
     }
+    joining = false;
     intro = { t: 0, dur: 2.2, from: camera.position.clone() };
     running = true;
     startMusic();
@@ -851,8 +867,36 @@ async function play() {
     $('#touch').hidden = !isTouch;
     if (!rig) buildPlayer(0, 0);
     teleportLobby();
+    showTips();
     toast('Run to gain Speed!', '#7dff6b');
     canvas.focus();
+    BX.loadingEnd();
+}
+// Embedded games get the Bloxity user from the portal handshake a moment after init
+function waitForLogin(ms) {
+    if (!BX.bloxity.ready || BX.identity().loggedIn) return Promise.resolve();
+    return new Promise((res) => {
+        const t0 = performance.now();
+        (function check() { if (BX.identity().loggedIn || performance.now() - t0 > ms) res(); else setTimeout(check, 100); })();
+    });
+}
+// Controls reminder for the first seconds of play
+function showTips() {
+    const el = $('#tips');
+    const k = (key, what) => `<span><kbd>${key}</kbd>${what}</span>`;
+    el.innerHTML = pad.connected
+        ? k('L', 'Move') + k('A', 'Jump') + k('RT', 'Sprint') + k('X', 'Interact') + k('R', 'Camera')
+        : isTouch
+            ? '<span>Joystick to move · JUMP · SPRINT · drag to look</span>'
+            : k('WASD', 'Move') + k('Space', 'Jump') + k('Shift', 'Sprint') + k('E', 'Interact') + k('Drag', 'Camera') + k('Wheel', 'Zoom');
+    el.hidden = false; el.style.opacity = 1;
+    setTimeout(() => { el.style.opacity = 0; }, 9000);
+    setTimeout(() => { el.hidden = true; }, 9900);
+}
+// Browsers only start audio after a user gesture
+function unlockAudioOnGesture() {
+    const unlock = () => { initAudio(); removeEventListener('pointerdown', unlock); removeEventListener('keydown', unlock); removeEventListener('touchstart', unlock); };
+    addEventListener('pointerdown', unlock); addEventListener('keydown', unlock); addEventListener('touchstart', unlock);
 }
 
 // Portal settings only apply when the game runs inside bloxity.io (standalone has its own panel)
@@ -874,23 +918,17 @@ function wirePortalEvents() {
     BX.onAvatarChanged(() => syncMyAvatar());
     BX.onProportionsChanged(() => syncMyAvatar());
 }
-// Account chip (HUD) and the start-screen login row
+// Account chip in the HUD
 function showIdentity(id) {
     const avail = BX.bloxity.ready;
-    $('#bxRow').hidden = !avail;
     $('#acct').hidden = !avail;
     if (!avail) return;
     const label = id.name || 'Guest';
-    $('#bxStatus').textContent = id.loggedIn ? 'Playing as ' + label : 'Guest: ' + label;
-    $('#bxLogin').textContent = id.loggedIn ? 'Log out' : 'Log in with Bloxity';
     $('#acctName').textContent = label;
     $('#acctBtn').textContent = id.loggedIn ? 'Log out' : 'Log in';
     const pfp = $('#acctPfp');
     pfp.hidden = !id.pfp;
     if (id.pfp) pfp.src = id.pfp;
-    $('#nameInput').hidden = id.loggedIn;
-    $('#nameLabel').hidden = id.loggedIn;
-    if (!id.loggedIn && !$('#nameInput').value && id.name) $('#nameInput').placeholder = id.name;
 }
 function toggleLogin() { if (BX.identity().loggedIn) BX.logout(); else BX.login(); }
 
@@ -909,16 +947,12 @@ async function boot() {
         if (net.room && id.loggedIn && id.token && !net.bloxity) net.send('auth', { token: id.token });
         if (net.room) { setupLocalAvatar(); syncMyAvatar(); }
     });
-    $('#bxLogin').addEventListener('click', toggleLogin);
     $('#acctBtn').addEventListener('click', toggleLogin);
-    $('#nameInput').value = storageGet('sfs_name') || '';
-    $('#loading').hidden = true;
-    $('#joinRow').hidden = false;
-    if (isTouch) $('#controlsKb').hidden = true;
     $('#playBtn').addEventListener('click', play);
-    $('#nameInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') play(); });
     $('#reconnectBtn').addEventListener('click', () => location.reload());
+    unlockAudioOnGesture();
     requestAnimationFrame(frame);
+    play();
 }
 boot();
 
@@ -926,6 +960,7 @@ boot();
 if (import.meta.env.DEV) {
     window.__qa = {
         P, S, STAGES, avatarStats, scene,
+        showcaseBall: (d, dx, dy, dz) => { const m = football(d); m.position.set(P.pos.x + dx, P.pos.y + dy, P.pos.z + dz); return true; },
         teleport: (x, y, z) => teleport(new V3(x, y, z), 0),
         state: () => ({ x: P.pos.x, y: P.pos.y, z: P.pos.z, dead: P.dead, stage: P.stage, wins: S.wins, level: S.level, speed: S.speed, aura: S.aura, equipped: S.equipped, rebirths: S.rebirths }),
     };

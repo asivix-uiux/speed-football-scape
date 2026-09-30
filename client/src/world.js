@@ -589,7 +589,7 @@ export function updateGates(t, dt) {
         // Seen from close behind (just after running through) the field would cover the whole screen
         const d = Math.abs(camera.position.z - g.z);
         const behind = camera.position.z > g.z;
-        g.m.uniforms.uFade.value = behind ? Math.min(1, Math.max(0.12, (d - 4) / 30)) : Math.min(1, Math.max(0.35, (d - 2) / 12));
+        g.m.uniforms.uFade.value = behind ? Math.min(1, Math.max(0.08, (d - 4) / 34)) : Math.min(1, Math.max(0.15, (d - 3) / 26));
     }
 }
 

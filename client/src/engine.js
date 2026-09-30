@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 
 export const T = THREE;
 export const V3 = THREE.Vector3;
@@ -386,29 +387,83 @@ export function updateAuraFx(fx, aura, t) {
 }
 
 // ----- football -----
-const ballTex = (() => {
-    const W = 512, H = 256;
-    const c = document.createElement('canvas'); c.width = W; c.height = H;
-    const x = c.getContext('2d');
-    x.fillStyle = '#fbfbfb'; x.fillRect(0, 0, W, H);
+// Classic 32-panel ball (truncated icosahedron): 12 black pentagons, 20 white hexagons,
+// stitched seams baked into a colour map and a "pillow" normal map. Textures follow
+// SphereGeometry's own UV layout so the panels are not distorted.
+const ballMaps = (() => {
+    const W = 1024, H = 512;
     const phi = (1 + Math.sqrt(5)) / 2;
-    const verts = [[0, 1, phi], [0, -1, phi], [0, 1, -phi], [0, -1, -phi], [1, phi, 0], [-1, phi, 0], [1, -phi, 0], [-1, -phi, 0], [phi, 0, 1], [-phi, 0, 1], [phi, 0, -1], [-phi, 0, -1]];
-    x.fillStyle = '#18181c';
-    for (const v of verts) {
-        const l = Math.hypot(v[0], v[1], v[2]);
-        const lon = Math.atan2(v[0] / l, v[2] / l), lat = Math.asin(v[1] / l);
-        const u = (lon / (Math.PI * 2) + 0.5) * W, vv = (0.5 - lat / Math.PI) * H;
-        const ry = H * 0.075, rx = Math.min(W * 0.5, ry / Math.max(0.12, Math.cos(lat)));
-        for (const off of [-W, 0, W]) {
-            x.beginPath();
-            for (let k = 0; k < 5; k++) { const a = -Math.PI / 2 + k * Math.PI * 2 / 5; x.lineTo(u + off + Math.cos(a) * rx, vv + Math.sin(a) * ry); }
-            x.closePath(); x.fill();
+    const ico = [[0, 1, phi], [0, -1, phi], [0, 1, -phi], [0, -1, -phi], [1, phi, 0], [-1, phi, 0], [1, -phi, 0], [-1, -phi, 0], [phi, 0, 1], [-phi, 0, 1], [phi, 0, -1], [-phi, 0, -1]];
+    const norm = (v) => { const l = Math.hypot(v[0], v[1], v[2]); return [v[0] / l, v[1] / l, v[2] / l]; };
+    const centers = [], black = [];
+    for (const v of ico) { centers.push(norm(v)); black.push(true); }
+    // Hexagons sit on the icosahedron's 20 faces (triples of vertices 2 apart)
+    const d2 = (a, b) => (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
+    for (let i = 0; i < 12; i++) for (let j = i + 1; j < 12; j++) for (let k = j + 1; k < 12; k++) {
+        if (Math.abs(d2(ico[i], ico[j]) - 4) < 0.01 && Math.abs(d2(ico[j], ico[k]) - 4) < 0.01 && Math.abs(d2(ico[i], ico[k]) - 4) < 0.01) {
+            centers.push(norm([ico[i][0] + ico[j][0] + ico[k][0], ico[i][1] + ico[j][1] + ico[k][1], ico[i][2] + ico[j][2] + ico[k][2]]));
+            black.push(false);
         }
     }
-    return texFrom(c);
+    const height = new Float32Array(W * H);
+    const cCan = document.createElement('canvas'); cCan.width = W; cCan.height = H;
+    const cx = cCan.getContext('2d');
+    const img = cx.createImageData(W, H), px = img.data;
+    for (let y = 0; y < H; y++) {
+        const theta = (y + 0.5) / H * Math.PI, st = Math.sin(theta), ct = Math.cos(theta);
+        for (let x = 0; x < W; x++) {
+            const ph = (x + 0.5) / W * Math.PI * 2;
+            // Same direction SphereGeometry gives this uv
+            const dx = -Math.cos(ph) * st, dy = ct, dz = Math.sin(ph) * st;
+            let b1 = -2, b2 = -2, bi = 0;
+            for (let i = 0; i < centers.length; i++) {
+                // Pentagons are biased smaller so they cover ~16% of the ball, like a real one
+                const c = centers[i], d = c[0] * dx + c[1] * dy + c[2] * dz - (black[i] ? 0.072 : 0);
+                if (d > b1) { b2 = b1; b1 = d; bi = i; } else if (d > b2) b2 = d;
+            }
+            const e = b1 - b2; // 0 on a seam, grows toward the panel centre
+            const pillow = Math.min(1, e / 0.07);
+            const hgt = pillow * (2 - pillow);
+            height[y * W + x] = hgt;
+            const seam = e < 0.006;
+            const i4 = (y * W + x) * 4;
+            let r, g, b;
+            if (seam) { r = 70; g = 70; b = 74; }
+            else if (black[bi]) { const s = 18 + 16 * hgt; r = s; g = s; b = s + 4; }
+            else { const s = 205 + 45 * hgt; r = s; g = s; b = s - 4; }
+            px[i4] = r; px[i4 + 1] = g; px[i4 + 2] = b; px[i4 + 3] = 255;
+        }
+    }
+    cx.putImageData(img, 0, 0);
+    const nCan = document.createElement('canvas'); nCan.width = W; nCan.height = H;
+    const nx = nCan.getContext('2d');
+    const nImg = nx.createImageData(W, H), np = nImg.data;
+    const S = 3.2;
+    for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+            const hL = height[y * W + ((x - 1 + W) % W)], hR = height[y * W + ((x + 1) % W)];
+            const hU = height[Math.max(0, y - 1) * W + x], hD = height[Math.min(H - 1, y + 1) * W + x];
+            let ux = (hL - hR) * S, uy = (hD - hU) * S, uz = 1;
+            const l = Math.hypot(ux, uy, uz);
+            const i4 = (y * W + x) * 4;
+            np[i4] = (ux / l * 0.5 + 0.5) * 255; np[i4 + 1] = (uy / l * 0.5 + 0.5) * 255; np[i4 + 2] = (uz / l * 0.5 + 0.5) * 255; np[i4 + 3] = 255;
+        }
+    }
+    nx.putImageData(nImg, 0, 0);
+    const map = texFrom(cCan);
+    map.anisotropy = renderer.capabilities.getMaxAnisotropy();
+    const normalMap = new T.CanvasTexture(nCan);
+    normalMap.anisotropy = map.anisotropy;
+    return { map, normalMap };
 })();
-const BALL_GEO = new T.SphereGeometry(1, 28, 18);
-const BALL_MAT = new T.MeshLambertMaterial({ map: ballTex });
+// Soft studio reflections so the leather reads as glossy
+const ballEnv = new T.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+const BALL_GEO = new T.SphereGeometry(1, 48, 32);
+const BALL_MAT = new T.MeshPhysicalMaterial({
+    map: ballMaps.map, normalMap: ballMaps.normalMap, normalScale: new T.Vector2(0.9, 0.9),
+    roughness: 0.55, metalness: 0, clearcoat: 0.45, clearcoatRoughness: 0.3,
+    envMap: ballEnv, envMapIntensity: 0.35,
+});
 export function football(d, parent) {
     const m = new T.Mesh(BALL_GEO, BALL_MAT);
     m.scale.setScalar(d / 2); m.castShadow = true;
